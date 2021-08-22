@@ -1,0 +1,368 @@
+
+-- temp tables for the pools 
+
+-- the pools and poolbodies
+SELECT   
+    pools.cusip,
+    pools.name,
+    pools.issuedate,
+    pools.originalface,
+    poolbodies."remainingBalance",
+    poolbodies.factor,
+    poolbodies."GWAC",
+    poolbodies."WAM",
+    poolbodies."WALA",
+    poolbodies.date
+INTO TEMP TABLE pools202106 
+FROM pools 
+INNER JOIN poolbodies
+ON pools.cusip = poolbodies.cusip 
+WHERE poolbodies.date = '2021-06-01';
+
+-- the poolpredictions for the next month
+
+SELECT *
+INTO TEMP TABLE poolpredictions202107 
+FROM poolpredictions
+WHERE poolpredictions.date = '2021-07-01';
+
+SELECT *
+INTO TEMP TABLE poolfhavas202107 
+FROM poolfhavas
+WHERE poolfhavas.date = '2021-07-01';
+
+
+-- So to combine Poolbodies, PoolPredictions, PoolFHAVAs we used this 
+
+-- This should be good for giving me the poolbody info for deployed site 
+
+-- would this be better if I made temp tables for the poolbodies, poolpredictions, poolfhavas?? I don't know
+
+-- with temp tables 
+
+SELECT
+  pools202106.cusip,
+  pools202106.name,
+  pools202106.issuedate,
+  pools202106.originalface,
+  pools202106.factor,
+  pools202106."GWAC",
+  pools202106."WAM",
+  pools202106."WALA",
+  poolpredictions202107.cpr,
+  poolpredictions202107."cprNext",
+  poolfhavas202107.va,
+  pools202106.date
+FROM
+  pools202106
+  LEFT JOIN poolpredictions202107 ON (pools202106.cusip = poolpredictions202107.cusip)
+  LEFT JOIN poolfhavas202107 ON (pools202106.cusip = poolfhavas202107.cusip)
+WHERE pools202106.cusip = '36224P6N3'  
+LIMIT
+  10;
+
+-- without temp tables 
+
+SELECT
+  pools.cusip,
+  pools.name,
+  pools.issuedate,
+  pools.originalface,
+  poolbodies.factor,
+  poolbodies."GWAC",
+  poolbodies."WAM",
+  poolbodies."WALA",
+  poolpredictions.cpr,
+  poolpredictions."cprNext",
+  poolfhavas.va,
+  poolbodies.date
+FROM
+  pools
+  INNER JOIN poolbodies ON (pools.cusip = poolbodies.cusip)
+  LEFT JOIN poolpredictions ON (poolbodies.cusip = poolpredictions.cusip)
+  LEFT JOIN poolfhavas ON (poolbodies.cusip = poolfhavas.cusip)
+WHERE
+  poolbodies.date = '2021-06-01'
+  AND poolpredictions.date = '2021-07-01'
+  AND poolfhavas.date = '2021-07-1'
+  AND pools.cusip = '36224P6N3'  
+LIMIT
+  10;
+
+
+
+-- This is were I start using SQL to find the amount of original face in platinums:
+--  now with temp table does Active or teminated matter??
+
+
+SELECT 
+    count(*),
+    poolname,
+    indicator,
+    SUM(faceinplatinum)
+INTO TEMP TABLE ofinplatinum 
+FROM platcolls
+GROUP BY
+    poolname,
+    indicator
+
+-- with temp table
+
+SELECT
+  *
+FROM
+  pools
+INNER JOIN ofinplatinum 
+ON pools.name = ofinplatinum.poolname
+AND pools.indicator = ofinplatinum.indicator
+LIMIT
+  10;
+
+
+-- without temp table
+
+SELECT
+  *
+FROM
+  pools
+  INNER JOIN (
+    SELECT
+      count(*),
+      poolname,
+      indicator,
+      SUM(faceinplatinum)
+    FROM
+      platcolls
+    GROUP BY
+      poolname,
+      indicator
+  ) AS x ON pools.name = x.poolname
+  AND pools.indicator = x.indicator
+  AND pools.cusip = '36205CKV1'
+LIMIT
+  10;
+
+-- adding more stuff to pools 
+
+
+SELECT
+  pools.cusip,
+  pools.name,
+  pools.issuedate,
+  pools.originalface,
+  poolbodies.factor,
+  poolbodies."GWAC",
+  poolbodies."WAM",
+  poolbodies."WALA",
+  poolpredictions.cpr,
+  poolpredictions."cprNext",
+  poolfhavas.va,
+  poolbodies.date,
+  x.sum
+FROM
+  pools
+  INNER JOIN poolbodies ON (pools.cusip = poolbodies.cusip)
+  LEFT JOIN poolpredictions ON (poolbodies.cusip = poolpredictions.cusip)
+  LEFT JOIN poolfhavas ON (poolbodies.cusip = poolfhavas.cusip)
+  LEFT JOIN (
+    SELECT
+      count(*),
+      poolname,
+      indicator,
+      SUM(faceinplatinum)
+    FROM
+      platcolls
+    GROUP BY
+      poolname,
+      indicator
+  ) AS x ON pools.name = x.poolname
+  AND pools.indicator = x.indicator
+WHERE
+  poolbodies.date = '2021-06-01'
+  AND poolpredictions.date = '2021-07-01'
+  AND poolfhavas.date = '2021-07-01'
+--   AND pools.cusip = '36224P6N3'  
+LIMIT
+  10;
+
+-- still on pools 
+
+SELECT
+  pools.cusip,
+  pools.name,
+  pools.issuedate,
+  pools.originalface,
+  poolbodies.factor,
+  poolbodies."GWAC",
+  poolbodies."WAM",
+  poolbodies."WALA",
+  poolpredictions.cpr,
+  poolpredictions."cprNext",
+  poolfhavas.va,
+  poolbodies.date,
+  x.sum AS ofinplat,
+  y.sum AS ofincmo
+FROM
+  pools
+  INNER JOIN poolbodies ON (pools.cusip = poolbodies.cusip)
+  LEFT JOIN poolpredictions ON (poolbodies.cusip = poolpredictions.cusip)
+  LEFT JOIN poolfhavas ON (poolbodies.cusip = poolfhavas.cusip)
+  LEFT JOIN (
+    SELECT
+      count(*),
+      poolname,
+      indicator,
+      SUM(faceinplatinum)
+    FROM
+      platcolls
+    GROUP BY
+      poolname,
+      indicator
+  ) AS x ON pools.name = x.poolname
+  AND pools.indicator = x.indicator
+  LEFT JOIN (
+    SELECT
+      cusip,
+      date,
+      SUM(faceincmo)
+    FROM
+      ofincmos
+    GROUP BY
+      cusip,
+      date
+  ) AS y ON poolbodies.cusip = y.cusip
+WHERE
+  poolbodies.date = '2021-06-01'
+  AND poolpredictions.date = '2021-07-01'
+  AND poolfhavas.date = '2021-07-01'
+  AND y.date = '2021-06-01'
+--   AND pools.cusip = '36224P6N3'  
+LIMIT
+  10;
+
+
+
+-- so this does make it a lot easier to read
+
+
+SELECT  x.platcusip, 
+        SUM(COALESCE(x.ofxfactor, 0) + COALESCE(ofplatxfactor, 0))/100 AS currface
+-- random comment oh dip I can add comments
+FROM (
+    SELECT  platcolls.cusip AS platcusip, 
+            platcolls.poolname, 
+            platcolls.indicator, 
+            platcolls.faceinplatinum, 
+            currpools.cusip, 
+            currpools.name, 
+            currpools.indicator, 
+            currpools.originalface, 
+            currpools."remainingBalance", 
+            currpools."remainingBalance"/currpools.originalface AS poolfactor, 
+            platcolls.faceinplatinum * (currpools."remainingBalance"/currpools.originalface) AS ofxfactor, 
+            currplats.cusip, 
+            currplats.name, 
+            currplats.indicator, 
+            currplats.originalface, 
+            currplats.remainingbalance, 
+            currplats.remainingbalance/currplats.originalface AS platfactor, 
+            platcolls.faceinplatinum * (currplats.remainingbalance/currplats.originalface) AS ofplatxfactor
+    FROM platcolls
+    LEFT JOIN (
+        SELECT pools.cusip, pools.name, pools.indicator, pools.originalface, poolbodies."remainingBalance"
+        FROM pools
+        INNER JOIN poolbodies
+        ON pools.cusip = poolbodies.cusip
+        WHERE poolbodies.date = '2021-06-01' 
+    ) AS currpools
+    ON platcolls.poolname = currpools.name 
+    AND platcolls.indicator = currpools.indicator 
+    LEFT JOIN (
+        SELECT  platinums.cusip, 
+                platinums.name, 
+                platinums.indicator, 
+                platinums.originalface, 
+                platinumbodies.remainingbalance
+        FROM platinums
+        INNER JOIN platinumbodies
+        ON platinums.cusip = platinumbodies.cusip
+        WHERE platinumbodies.date = '2021-06-01' 
+    ) AS currplats
+    ON platcolls.poolname = currplats.name 
+    AND platcolls.indicator = currplats.indicator 
+    WHERE (currpools.cusip IS NOT NULL
+    OR currplats.cusip IS NOT NULL)
+    AND platcolls.cusip = '36225A2E9'
+    ) AS x
+GROUP BY x.platcusip
+
+
+SELECT
+  x.platcusip,
+  SUM(
+    COALESCE(x.ofxfactor, 0) + COALESCE(ofplatxfactor, 0)
+  ) / 100 AS currface
+FROM
+  (
+    SELECT
+      platcolls.cusip AS platcusip,
+      platcolls.poolname,
+      platcolls.indicator,
+      platcolls.faceinplatinum,
+      currpools.cusip,
+      currpools.name,
+      currpools.indicator,
+      currpools.originalface,
+      currpools."remainingBalance",
+      currpools."remainingBalance" / currpools.originalface AS poolfactor,
+      platcolls.faceinplatinum * (
+        currpools."remainingBalance" / currpools.originalface
+      ) AS ofxfactor,
+      currplats.cusip,
+      currplats.name,
+      currplats.indicator,
+      currplats.originalface,
+      currplats.remainingbalance,
+      currplats.remainingbalance / currplats.originalface AS platfactor,
+      platcolls.faceinplatinum * (
+        currplats.remainingbalance / currplats.originalface
+      ) AS ofplatxfactor
+    FROM
+      platcolls
+      LEFT JOIN (
+        SELECT
+          pools.cusip,
+          pools.name,
+          pools.indicator,
+          pools.originalface,
+          poolbodies."remainingBalance"
+        FROM
+          pools
+          INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
+        WHERE
+          poolbodies.date = '2021-06-01'
+      ) AS currpools ON platcolls.poolname = currpools.name
+      AND platcolls.indicator = currpools.indicator
+      LEFT JOIN (
+        SELECT
+          platinums.cusip,
+          platinums.name,
+          platinums.indicator,
+          platinums.originalface,
+          platinumbodies.remainingbalance
+        FROM
+          platinums
+          INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
+        WHERE
+          platinumbodies.date = '2021-06-01'
+      ) AS currplats ON platcolls.poolname = currplats.name
+      AND platcolls.indicator = currplats.indicator
+    WHERE
+      (
+        currpools.cusip IS NOT NULL
+        OR currplats.cusip IS NOT NULL
+      )
+      AND platcolls.cusip = '36225A2E9'
+  ) AS x
+GROUP BY
+  x.platcusip
