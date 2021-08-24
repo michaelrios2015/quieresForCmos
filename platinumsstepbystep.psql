@@ -93,19 +93,39 @@ AND pools.istbaelig = 'true'
 -- so a pool can be in more than one platinums so we need to go through them all find the currface in plat the sum them up by pool cusip, then I can subtract from pool currface ...
 
 
-SELECT x.platcusip, SUM(x.currfaceinplat) 
-FROM (
-SELECT *, poolsforcurrfaceplat.cusip AS platcusip, (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
+SELECT poolsforcurrfaceplat.cusip AS poolcusip, (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
+INTO TEMP TABLE poolcurrfaceinplatt
 FROM platcolls
 INNER JOIN poolsforcurrfaceplat
 ON poolsforcurrfaceplat.name = platcolls.poolname
-AND poolsforcurrfaceplat.indicator = platcolls.indicator
-AND poolsforcurrfaceplat.cusip = '36202CTQ6'
-) AS x
-GROUP BY x.platcusip
-;
+AND poolsforcurrfaceplat.indicator = platcolls.indicator;
+
+
+
+---so this gets the sum of all of the pools current face in plats grouped by the pool cusip 
+SELECT poolcurrfaceinplatt.poolcusip, SUM(poolcurrfaceinplatt.currfaceinplat)
+INTO TEMP TABLE totalpoolcurrfaceinplatt  
+FROM poolcurrfaceinplatt
+GROUP BY poolcurrfaceinplatt.poolcusip
+
 
 LIMIT 10;
+
+-- this should be the current face of all pools minus the current face in the plats so should probably pair this down
+SELECT *, poolsforcurrfaceplat."remainingBalance" - COALESCE(sum, 0) as poolcfminuscfinplat
+INTO TEMP TABLE poolcurrfaceminuscurrentfaceinplatt 
+FROM poolsforcurrfaceplat
+LEFT JOIN totalpoolcurrfaceinplatt
+ON poolsforcurrfaceplat.cusip = totalpoolcurrfaceinplatt.poolcusip
+
+-- so now I get the current face of all the plats then join with the above table on interestRate then sum them and group them by interestRate??
+
+
+LIMIT 10;
+
+
+
+
 
 SELECT *
 FROM platcolls

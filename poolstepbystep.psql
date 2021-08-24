@@ -265,7 +265,24 @@ poolfhavas.date = '2021-07-01'
 -------------------This hopefully gets us the sum of the current face grouped by coupon for certain pools
 
 -- the pools and poolbodies
-
+SELECT   
+    pools.cusip,
+    pools.name,
+    pools.indicator,
+    pools.type,
+    pools.originalface,
+    poolbodies."interestRate",
+    poolbodies."remainingBalance",
+    poolbodies.factor,
+    poolbodies.date 
+INTO TEMP TABLE poolsforcurrfaceplat 
+FROM pools 
+INNER JOIN poolbodies
+ON pools.cusip = poolbodies.cusip 
+WHERE poolbodies.date = '2021-07-01'
+AND pools.indicator = 'M'
+AND pools.type = 'SF'
+AND pools.istbaelig = 'true'
 
 
 -- not so many SELECT 2454
