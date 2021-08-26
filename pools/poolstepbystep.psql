@@ -131,7 +131,7 @@ LIMIT
 -- adding original face in cmos 
 
 -- TEMP TABLE 
--- not really sure how date is being used.....
+-- not really sure how date is being used..... might have to remove it 
 
 SELECT
     cusip,
@@ -262,72 +262,3 @@ AND
 poolfhavas.date = '2021-07-01'
 
 
--------------------This hopefully gets us the sum of the current face grouped by coupon for certain pools
-
--- the pools and poolbodies
-SELECT   
-    pools.cusip,
-    pools.name,
-    pools.indicator,
-    pools.type,
-    pools.originalface,
-    poolbodies."interestRate",
-    poolbodies."remainingBalance",
-    poolbodies.factor,
-    poolbodies.date 
-INTO TEMP TABLE poolsforcurrfaceplat 
-FROM pools 
-INNER JOIN poolbodies
-ON pools.cusip = poolbodies.cusip 
-WHERE poolbodies.date = '2021-07-01'
-AND pools.indicator = 'M'
-AND pools.type = 'SF'
-AND pools.istbaelig = 'true'
-
-
--- not so many SELECT 2454
-
-
--- yeah not a ton of these guys  
-SELECT 
-  count(*)  
-FROM pools 
-INNER JOIN poolbodies
-ON pools.cusip = poolbodies.cusip 
-WHERE poolbodies.date = '2021-07-01'
-AND pools.indicator = 'M'
-AND pools.type = 'SF'
-
-SELECT poolstestforcurrface."interestRate", SUM(poolstestforcurrface."remainingBalance")
-FROM poolstestforcurrface
-GROUP BY poolstestforcurrface."interestRate"
-ORDER BY poolstestforcurrface."interestRate"
-
-SELECT   
-    pools.cusip,
-    pools.indicator,
-    pools.type,
-    poolbodies."interestRate",
-    poolbodies."remainingBalance",
-    poolbodies.factor,
-    poolbodies.date
--- this should probably be poolscurr as I hope to reuse it once a month 
-INTO TEMP TABLE poolstestforcurrfaceindicx 
-FROM pools 
-INNER JOIN poolbodies
-ON pools.cusip = poolbodies.cusip 
-WHERE poolbodies.date = '2021-07-01'
-AND pools.indicator = 'X'
-AND pools.type = 'SF'
-AND pools.istbaelig = 'true'
-
-SELECT poolstestforcurrfaceindicx."interestRate", SUM(poolstestforcurrfaceindicx."remainingBalance")
-FROM poolstestforcurrfaceindicx
-GROUP BY poolstestforcurrfaceindicx."interestRate"
-ORDER BY poolstestforcurrfaceindicx."interestRate"
-
-
-\copy (SELECT poolstestforcurrfaceindicx."interestRate", SUM(poolstestforcurrfaceindicx."remainingBalance") FROM poolstestforcurrfaceindicx GROUP BY poolstestforcurrfaceindicx."interestRate" ORDER BY poolstestforcurrfaceindicx."interestRate" ) to 'C:\Users\micha\sumofcurrentface' csv header;
-
-------------------
--- now we need to sum current face of pools + platinums 

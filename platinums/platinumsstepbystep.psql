@@ -1,0 +1,339 @@
+-- i used this to check if all the active pools in a platinum are tbaelig
+
+SELECT cusip, bool_and(x.istbaelig) as eligible
+FROM (
+	Select platcolls.cusip, platcolls.poolname, platcolls.indicator, pools.istbaelig
+	FROM pools
+	INNER JOIN platcolls
+	ON platcolls.poolname = pools.name
+	AND platcolls.indicator = pools.indicator
+	WHERE platcolls.active =  'A'
+ 	) AS x
+GROUP BY x.cusip
+
+
+----------- same thing with temp table does active matter?? We don't know if I am saying it is a permenant
+-- character than it probably does not matter but I already did it this way??
+
+Select platcolls.cusip, platcolls.poolname, platcolls.indicator, pools.istbaelig
+INTO TEMP TABLE poolsforistbaelig 
+FROM pools
+INNER JOIN platcolls
+ON platcolls.poolname = pools.name
+AND platcolls.indicator = pools.indicator
+WHERE platcolls.active =  'A'
+
+
+SELECT cusip, bool_and(poolsforistbaelig.istbaelig) as eligible
+FROM poolsforistbaelig
+GROUP BY poolsforistbaelig.cusip
+
+\copy (SELECT cusip, bool_and(poolsforistbaelig.istbaelig) as eligible FROM poolsforistbaelig GROUP BY poolsforistbaelig.cusip)  to 'C:\Users\micha\patinums_istbaelig_round_one' csv header;
+
+------------checking platinums against platinums
+
+SELECT cusip, bool_and(x.istbaelig) as eligible
+FROM (
+	SELECT platcolls.cusip, platcolls.poolname, platcolls.indicator, platinums.istbaelig
+FROM platinums
+INNER JOIN platcolls
+ON platcolls.poolname = platinums.name
+AND platcolls.indicator = platinums.indicator
+WHERE platcolls.active =  'A'
+AND platinums.istbaelig IS NOT NULL
+) AS x
+GROUP BY x.cusip
+
+-- temp table 
+
+SELECT platcolls.cusip, platcolls.poolname, platcolls.indicator, platinums.istbaelig
+INTO TEMP TABLE platsforistbaelig 
+FROM platinums
+INNER JOIN platcolls
+ON platcolls.poolname = platinums.name
+AND platcolls.indicator = platinums.indicator
+WHERE platcolls.active =  'A'
+AND platinums.istbaelig IS NOT NULL
+
+SELECT cusip, bool_and(platsforistbaelig.istbaelig) as eligible
+FROM platsforistbaelig 
+GROUP BY platsforistbaelig.cusip
+
+\copy (SELECT cusip, bool_and(platsforistbaelig.istbaelig) as eligible FROM platsforistbaelig GROUP BY platsforistbaelig.cusip)  to 'C:\Users\micha\patinums_istbaelig_round_two' csv header;
+
+
+-- I have been cheating about the loop through should try and figure out a while loop one of these days
+
+---------------------------------------------------
+
+---------------------------------
+
+-- this just combines platinum and platinum body for teh current month
+-- may or may not be neccessary but doing it for pools so why not 
+
+SELECT   
+    platinums.cusip,
+    platinums.name,
+    platinums.indicator,
+    platinums.issuedate,
+    platinums.originalface,
+    platinumbodies.interestrate,
+    platinumbodies.remainingbalance,
+    platinumbodies.factor,
+    platinumbodies.gwac,
+    platinumbodies.wam,
+    platinumbodies.wala,
+    platinumbodies.date
+INTO TEMP TABLE platinumscurr 
+FROM platinums 
+INNER JOIN platinumbodies
+ON platinums.cusip = platinumbodies.cusip 
+WHERE platinumbodies.date = '2021-07-01';
+
+LIMIT 10;
+
+
+-- just making sure poolpredictions did not include platinums seems to be true 
+Select * 
+from poolpredictions
+INNER JOIN platinums
+ON platinums.cusip = poolpredictions.cusip
+LIMIT 10;
+
+Select * 
+from poolpredictions
+INNER JOIN pools
+ON pools.cusip = poolpredictions.cusip
+LIMIT 10;
+
+
+
+-- getting original face of platinums in platinum other platinums 
+
+
+-- To sum the faceinplatinum by pool name, indicator and born , it seems to work but I am worried 
+-- So just using pool name and indicator will sum up all the face in platinum and work fine but now 
+-- I also have born so presumably we can have a platcoll from may and another one from june and these will not all be 
+-- together but without the born date I can only get the face in platinum for the latest month I think 
+  
+SELECT count(*) as c, poolname, indicator, born, SUM(faceinplatinum)
+FROM platcolls
+GROUP BY poolname, indicator, born
+HAVING count(*) > 10
+ORDER BY poolname ASC
+LIMIT 10;
+
+--- this is what we did with the pools I don't think I am going to worru about the born date for the moment
+-- without the born date you should only be able to do the latest month at a time becuase you can't have june platcoll
+-- data and not have it mess up april, that's ok for the moment that is how we will do it
+
+SELECT 
+    count(*),
+    poolname,
+    indicator,
+    SUM(faceinplatinum) as ofinplat
+INTO TEMP TABLE ofinplatinum 
+FROM platcolls
+GROUP BY
+    poolname,
+    indicator
+
+
+-- this is a clever way of geting the APril data once more platcolls have been loaded in case I meed it 
+
+SELECT count(*) as c, x.poolname, indicator, SUM(x.faceinplatinum)
+FROM (
+SELECT poolname, indicator, born, SUM(faceinplatinum) as faceinplatinum
+FROM platcolls
+WHERE born <= '2021-06-01'
+GROUP BY poolname, indicator, born
+) AS x
+GROUP BY x.poolname, x.indicator
+HAVING count(*) > 1
+ORDER BY x.poolname ASC
+LIMIT 10;
+
+-- The having statement should be removed, the date changed and the count is not necessary but other than 
+-- that it should be good 
+
+
+-- And then used this, this is fine as long as you just need the most recent face in platinum 
+
+SELECT *
+FROM platinums
+INNER JOIN ofinplatinum
+ON platinums.name = ofinplatinum.poolname
+AND 
+platinums.indicator = ofinplatinum.indicator
+LIMIT 10;
+  
+-- this is good ofinplat is measured in pennies
+-- so this is the platinum info I need and the original face in other platinums measured in pennies 
+
+SELECT 
+    platinumscurr.cusip, 
+    platinumscurr.interestrate, 
+    platinumscurr.remainingbalance, 
+    platinumscurr.factor, 
+    platinumscurr.gwac, 
+    platinumscurr.wam, 
+    platinumscurr.wala, 
+    ofinplat, 
+    platinumscurr.date
+FROM platinumscurr
+LEFT JOIN ofinplatinum
+ON platinumscurr.name = ofinplatinum.poolname
+AND 
+platinumscurr.indicator = ofinplatinum.indicator
+LIMIT 10;
+
+
+
+-------------------------------
+
+-- so i used this to get plat info plus plat of in other plats and of of plats in cmos
+
+SELECT platinumbodies.cusip, 
+    platinumbodies.interestrate, 
+    platinumbodies.remainingbalance, 
+    platinumbodies.factor, 
+    platinumbodies.gwac, 
+    platinumbodies.wam, 
+    platinumbodies.wala, 
+    x.sum as orignalfaceinplatinum, 
+    y.sum as originalfaceincmo, 
+    platinumbodies.date
+FROM platinumbodies
+INNER JOIN platinums 
+ON platinumbodies.cusip = platinums.cusip
+LEFT JOIN (
+    SELECT poolname, indicator, SUM(faceinplatinum)
+    FROM platcolls
+    GROUP BY poolname, indicator
+) AS x
+ON platinums.name = x.poolname
+AND 
+platinums.indicator = x.indicator
+LEFT JOIN (
+    SELECT cusip, date, SUM(faceincmo)
+    FROM ofincmos
+    WHERE date = '2021-06-01'
+    GROUP BY cusip, date ) AS y
+ON platinumbodies.cusip = y.cusip
+WHERE platinumbodies.date = '2021-06-01'
+LIMIT 10;
+
+-- so this is the cmo part
+
+ SELECT cusip, date, SUM(faceincmo) AS ofincmo
+ FROM ofincmos
+ WHERE date = '2021-06-01'
+ GROUP BY cusip, date
+ LIMIT 10; 
+
+
+-- turn it into a temp table so again not sure if I am really using date correctly
+
+ SELECT cusip, date, SUM(faceincmo) AS ofincmo
+ INTO TEMP TABLE platofincmos
+ FROM ofincmos
+ WHERE date = '2021-06-01'
+ GROUP BY cusip, date 
+
+
+--  so putting together with the other info 
+
+SELECT 
+    platinumscurr.cusip, 
+    platinumscurr.interestrate, 
+    platinumscurr.remainingbalance, 
+    platinumscurr.factor, 
+    platinumscurr.gwac, 
+    platinumscurr.wam, 
+    platinumscurr.wala, 
+    ofinplat,
+    ofincmo, 
+    platinumscurr.date
+FROM platinumscurr
+LEFT JOIN ofinplatinum
+ON platinumscurr.name = ofinplatinum.poolname
+AND 
+platinumscurr.indicator = ofinplatinum.indicator
+LEFT JOIN platofincmos
+ON platinumscurr.cusip = platofincmos.cusip
+-- WHERE platinumbodies.date = '2021-07-01'
+LIMIT 10;
+
+
+-- now just the fedholdings 
+
+-- This is what is used just to test it seems fine for now..
+-- so we want the current face but we are converting it to orginal face.... going to 
+-- leave this as it is for the moment definietly have questions
+-- so it can be a temp table 
+
+SELECT fedholdings.asofdate, 
+    fedholdings.cusip, 
+    fedholdings.currentfacevalue, 
+    platinumbodies.factor, 
+    fedholdings.currentfacevalue/platinumbodies.factor as originalfaceinfed    
+FROM fedholdings
+INNER JOIN platinumbodies
+ON fedholdings.cusip = platinumbodies.cusip
+WHERE platinumbodies.date = '2021-07-01'
+AND fedholdings.asofdate = '2021-07-21'
+LIMIT 10;
+
+-- not many.. think I asked about this but should double check
+
+SELECT 
+    fedholdings.asofdate, 
+    fedholdings.cusip, 
+    fedholdings.currentfacevalue, 
+    platinumbodies.factor, 
+    fedholdings.currentfacevalue/platinumbodies.factor as originalfaceinfed    
+INTO TEMP TABLE ofinfed
+FROM fedholdings
+INNER JOIN platinumbodies
+ON fedholdings.cusip = platinumbodies.cusip
+WHERE platinumbodies.date = '2021-07-01'
+AND fedholdings.asofdate = '2021-07-21'
+LIMIT 10;
+
+-- so this should be all the original faces removed from platimun the ofinplat and ofincmo should ve in peenies
+-- I think we want current face but the basics are here and can be tweaked later 
+
+
+SELECT 
+    platinumscurr.cusip, 
+    platinumscurr.interestrate, 
+    platinumscurr.remainingbalance, 
+    platinumscurr.factor, 
+    platinumscurr.gwac, 
+    platinumscurr.wam, 
+    platinumscurr.wala, 
+    ofinplat,
+    ofincmo, 
+    ofinfed.originalfaceinfed, 
+    platinumscurr.date
+FROM platinumscurr
+LEFT JOIN ofinplatinum
+ON platinumscurr.name = ofinplatinum.poolname
+AND 
+platinumscurr.indicator = ofinplatinum.indicator
+LEFT JOIN platofincmos
+ON platinumscurr.cusip = platofincmos.cusip
+LEFT JOIN ofinfed
+ON ofinfed.cusip = platinumscurr.cusip
+-- WHERE platinumbodies.date = '2021-07-01'
+LIMIT 10;
+
+
+-- not sure whatt this guy is
+SELECT *
+FROM platcolls
+RIGHT JOIN poolsforcurrfaceplat
+ON poolsforcurrfaceplat.name = platcolls.poolname
+AND poolsforcurrfaceplat.indicator = platcolls.indicator
+AND platcolls.cusip IS NULL
+LIMIT 10;
