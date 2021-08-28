@@ -37,8 +37,12 @@
 
 -- SUM(platcolls.faceinplatinum * (currpools."remainingBalance"/currpools.originalface)) AS currface,
 
+-- we get the current face of each pool so this is either to test the logic or because it is more accurate not sure
+
 ----making temp tables
 -- what we need from pools
+-- name and indicator to join with platcoll
+-- original face and remaining balance 
 SELECT
     pools.cusip,
     pools.name,

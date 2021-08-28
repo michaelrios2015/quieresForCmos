@@ -129,7 +129,10 @@ AND pools.istbaelig = 'true';
 
 --so this gets currentface of a pool in the plats 
 
-SELECT poolsforcurrfaceplat.cusip AS poolcusip, (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
+SELECT 
+    poolsforcurrfaceplat.cusip AS poolcusip, 
+    (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, 
+    poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
 INTO TEMP TABLE poolcurrfaceinplatt
 FROM platcolls
 INNER JOIN poolsforcurrfaceplat
@@ -138,10 +141,41 @@ AND poolsforcurrfaceplat.indicator = platcolls.indicator;
 
 -- WHERE poolsforcurrfaceplat.cusip = '36202CTQ6';
 
+SELECT 
+    platcolls.cusip,
+    poolsforcurrfaceplat.cusip AS poolcusip, 
+    (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, 
+    poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
+-- INTO TEMP TABLE poolcurrfaceinplatt
+FROM platcolls
+INNER JOIN poolsforcurrfaceplat
+ON poolsforcurrfaceplat.name = platcolls.poolname
+AND poolsforcurrfaceplat.indicator = platcolls.indicator
+WHERE poolsforcurrfaceplat.cusip = '36202CHS5';
 
+   cusip   | poolcusip |   currfaceinplat   |       factortwo
+-----------+-----------+--------------------+-----------------------
+ 36225AGG9 | 36202CHS5 | 2626.0004013648554 | 0.0015847633424650462
+
+    cusip   |  name  | indicator | type | issuedate | maturitydate | originalface | istbaelig
+-----------+--------+-----------+------+-----------+--------------+--------------+-----------
+ 36225AGG9 | 780199 | C         | SP   |  19950701 |     20250720 |     10077859 | t
+
+
+   cusip   |  name  | indicator | type | issuedate | maturitydate | originalface | istbaelig
+-----------+--------+-----------+------+-----------+--------------+--------------+-----------
+ 36202CHS5 | 002041 | M         | SF   |  19950701 |     20250720 |     17281533 | t
+
+SELECT * FROM platcolls WHERE cusip = '36225AGG9' and poolname = '002041';    
+
+   cusip   | poolname | indicator | faceinplatinum | active |    born    | terminated
+-----------+----------+-----------+----------------+--------+------------+------------
+ 36225AGG9 | 002041   | M         |      165703000 | A      | 2021-05-01 |
 
 ---so this gets the sum of all of the pools current face in plats grouped by the pool cusip 
-SELECT poolcurrfaceinplatt.poolcusip, SUM(poolcurrfaceinplatt.currfaceinplat) as sumpoolcfinplat
+SELECT 
+    poolcurrfaceinplatt.poolcusip, 
+    SUM(poolcurrfaceinplatt.currfaceinplat) as sumpoolcfinplat
 INTO TEMP TABLE totalpoolcurrfaceinplatt  
 FROM poolcurrfaceinplatt
 GROUP BY poolcurrfaceinplatt.poolcusip;
@@ -151,19 +185,39 @@ GROUP BY poolcurrfaceinplatt.poolcusip;
 -- this should be the current face of all pools minus the current face in the plats so should probably pair this down
 -- so at this point i should be able to sum and gourp by interet rate and be good with the pool portion
 
-SELECT poolsforcurrfaceplat.cusip, poolsforcurrfaceplat."interestRate", poolsforcurrfaceplat."remainingBalance" - COALESCE(sumpoolcfinplat, 0) as poolcfminuscfinplat
+SELECT 
+    poolsforcurrfaceplat.cusip, 
+    poolsforcurrfaceplat."interestRate", 
+    poolsforcurrfaceplat."remainingBalance" - COALESCE(sumpoolcfinplat, 0) AS poolcfminuscfinplat
 INTO TEMP TABLE poolcurrfaceminuscurrentfaceinplatt 
 FROM poolsforcurrfaceplat
 LEFT JOIN totalpoolcurrfaceinplatt
 ON poolsforcurrfaceplat.cusip = totalpoolcurrfaceinplatt.poolcusip;
 
 
+
+SELECT 
+    poolsforcurrfaceplat.cusip, 
+    poolsforcurrfaceplat."interestRate", 
+    poolsforcurrfaceplat."remainingBalance",
+    sumpoolcfinplat,  
+    poolsforcurrfaceplat."remainingBalance" - COALESCE(sumpoolcfinplat, 0) AS poolcfminuscfinplat
+-- INTO TEMP TABLE poolcurrfaceminuscurrentfaceinplatt 
+FROM poolsforcurrfaceplat
+LEFT JOIN totalpoolcurrfaceinplatt
+ON poolsforcurrfaceplat.cusip = totalpoolcurrfaceinplatt.poolcusip
+WHERE "interestRate" = 9.5;
+
 -- seems to be the sums
 
-SELECT "interestRate", SUM(poolcfminuscfinplat)
+SELECT 
+    "interestRate", 
+    SUM(poolcfminuscfinplat) AS sumofpoolcfminusplatcf
 INTO TEMP TABLE suminterestratepool
 FROM poolcurrfaceminuscurrentfaceinplatt
-GROUP BY "interestRate"
+GROUP BY "interestRate";
+
+
 
 
 LIMIT 10;
@@ -201,9 +255,9 @@ ON platinums.cusip = platinumbodies.cusip
 WHERE platinumbodies.date = '2021-07-01'
 AND platinums.indicator = 'M'
 AND platinums.type = 'SP'
-AND platinums.istbaelig = 'true'
+AND platinums.istbaelig = 'true';
 
-LIMIT 10;
+-- LIMIT 10;
 
 --so this gets currentface of a plat in other plats, this is the second step i used for pools now to rearrange it  
 
@@ -215,10 +269,10 @@ INTO TEMP TABLE platlcurrfaceinotherplatt
 FROM platcolls
 INNER JOIN platsforcurrfaceplat
 ON platsforcurrfaceplat.name = platcolls.poolname
-AND platsforcurrfaceplat.indicator = platcolls.indicator
+AND platsforcurrfaceplat.indicator = platcolls.indicator;
 
 
-LIMIT 10;
+-- LIMIT 10;
 
 
 -- just using this to check seems to check out 
@@ -237,11 +291,13 @@ LIMIT 10;
 
 
 ---so this gets the sum of all of the plats current face in other plats grouped by the original plat cusip, seems to work 
-SELECT platlcurrfaceinotherplatt.platcusip, SUM(platlcurrfaceinotherplatt.currfaceinotherplat) as sumplatcfinotherplat
+SELECT 
+    platlcurrfaceinotherplatt.platcusip, 
+    SUM(platlcurrfaceinotherplatt.currfaceinotherplat) as sumplatcfinotherplat
 INTO TEMP TABLE totalplatcurrfaceinotherplatt  
 FROM platlcurrfaceinotherplatt
 -- WHERE  platlcurrfaceinotherplatt.platcusip = '36225BNS3'
-GROUP BY platlcurrfaceinotherplatt.platcusip
+GROUP BY platlcurrfaceinotherplatt.platcusip;
 
 LIMIT 10;
 
@@ -250,7 +306,10 @@ LIMIT 10;
 -- so at this point i should be able to sum and gourp by interet rate and be good with the pool portion
 -- and if I have the other table I can join them by interest rate sume them and group them by interest rate but does not seem right
 
-SELECT platsforcurrfaceplat.cusip, platsforcurrfaceplat.interestrate, platsforcurrfaceplat.remainingbalance - COALESCE(sumplatcfinotherplat, 0) as platcfminuscfinotherplat
+SELECT 
+    platsforcurrfaceplat.cusip, 
+    platsforcurrfaceplat.interestrate, 
+    platsforcurrfaceplat.remainingbalance - COALESCE(sumplatcfinotherplat, 0) AS platcfminuscfinotherplat
 INTO TEMP TABLE platcurrfaceminuscurrentfaceinotherplatt 
 FROM platsforcurrfaceplat
 LEFT JOIN totalplatcurrfaceinotherplatt 
@@ -258,17 +317,21 @@ ON platsforcurrfaceplat.cusip = totalplatcurrfaceinotherplatt.platcusip
 
 
 -- now summing it up and grouping by interest rate 
-SELECT interestrate, SUM(platcfminuscfinotherplat)
+SELECT 
+    interestrate, 
+    SUM(platcfminuscfinotherplat) 
 FROM platcurrfaceminuscurrentfaceinotherplatt
 GROUP BY interestrate
 LIMIT 10;
 
 -- a temp table for it  
 
-SELECT interestrate, SUM(platcfminuscfinotherplat)
+SELECT 
+    interestrate, 
+    SUM(platcfminuscfinotherplat) AS sumplatcfminuscfinotherplat
 INTO TEMP TABLE platinterestratesum
 FROM platcurrfaceminuscurrentfaceinotherplatt
-GROUP BY interestrate
+GROUP BY interestrate;
 
 
 
@@ -277,20 +340,32 @@ GROUP BY interestrate
 -- trying to combine both tables
 
 -- ok
-SELECT suminterestratepool."interestRate", suminterestratepool.sum, platinterestratesum.interestRate, platinterestratesum.sum 
+SELECT 
+    suminterestratepool."interestRate" AS poolcoupon, 
+    suminterestratepool.sumofpoolcfminusplatcf, 
+    platinterestratesum.interestRate AS platcoupon, 
+    platinterestratesum.sumplatcfminuscfinotherplat 
 FROM suminterestratepool
 FULL JOIN platinterestratesum
-ON suminterestratepool."interestRate" = platinterestratesum.interestRate
+ON suminterestratepool."interestRate" = platinterestratesum.interestRate;
 
+--- same thing as above but to copy
+\COPY (SELECT suminterestratepool."interestRate" AS poolcoupon, suminterestratepool.sumofpoolcfminusplatcf, platinterestratesum.interestRate AS platcoupon, platinterestratesum.sumplatcfminuscfinotherplat FROM suminterestratepool FULL JOIN platinterestratesum ON suminterestratepool."interestRate" = platinterestratesum.interestRate) to 'C:\Users\micha\sizecheckone' csv header;
 
+--it combines the two tables but are the two tables right 
 
-SELECT suminterestratepool."interestRate", platinterestratesum.interestRate, SUM(COALESCE(suminterestratepool.sum, 0) + COALESCE(platinterestratesum.sum, 0)) 
+SELECT 
+    COALESCE(suminterestratepool."interestRate",  platinterestratesum.interestRate), 
+    SUM(COALESCE(sumofpoolcfminusplatcf, 0) + COALESCE(platinterestratesum.sumplatcfminuscfinotherplat, 0)) AS poolweightplusplatweight
 FROM suminterestratepool
 FULL JOIN platinterestratesum
 ON suminterestratepool."interestRate" = platinterestratesum.interestRate
 GROUP BY suminterestratepool."interestRate", platinterestratesum.interestRate
-ORDER BY suminterestratepool."interestRate" ASC
+ORDER BY suminterestratepool."interestRate" ASC;
 
+
+--- same thing as above but to copy
+\COPY (SELECT COALESCE(suminterestratepool."interestRate",  platinterestratesum.interestRate), SUM(COALESCE(sumofpoolcfminusplatcf, 0) + COALESCE(platinterestratesum.sumplatcfminuscfinotherplat, 0)) AS poolweightplusplatweight FROM suminterestratepool FULL JOIN platinterestratesum ON suminterestratepool."interestRate" = platinterestratesum.interestRate GROUP BY suminterestratepool."interestRate", platinterestratesum.interestRate ORDER BY suminterestratepool."interestRate" ASC) to 'C:\Users\micha\sizechecktwo' csv header;
 
 
 LIMIT 10;
@@ -317,3 +392,8 @@ LEFT JOIN totalplatcurrfaceinotherplatt
 ON platsforcurrfaceplat.cusip = totalplatcurrfaceinotherplatt.platcusip
 WHERE totalplatcurrfaceinotherplatt.platcusip = '36225BNS3'
 LIMIT 10;
+
+SELECT * from pools INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip WHERE pools.cusip = '36202CHS5';
+
+
+5985.59 + 14492 + 21544.38 + 25293.81 + 27387.14
