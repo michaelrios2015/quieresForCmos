@@ -397,3 +397,45 @@ SELECT * from pools INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip WHER
 
 
 5985.59 + 14492 + 21544.38 + 25293.81 + 27387.14
+
+
+--------------------------------------
+----------------CMOS
+
+-- definitely plats in cmos
+
+
+SELECT COUNT (*) 
+FROM ofincmos
+INNER JOIN platinums
+ON platinums.cusip = ofincmos.cusip
+
+
+-- current face of pool -  current face in CMOs +  current face Platinums
+
+-- only pools with 
+
+-- indicator = 'M' AND 
+-- type = 'SF' AND 
+-- istbaelig = 'true'
+
+-- and then we are subtracting the current face of those pools in CMOs
+
+-- Then adding the current face of platinums with 
+
+-- indicator = 'M' AND 
+-- type = 'SP' AND 
+-- istbaelig = 'true'
+
+
+--------------------------------------FED
+
+-- smal amount of plats in fedholdings  
+
+-- current face of pool -  current face in FED +  current face Platinums
+
+
+SELECT COUNT (*) 
+FROM fedholdings
+INNER JOIN platinums
+ON platinums.cusip = fedholdings.cusip

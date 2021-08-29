@@ -1,3 +1,73 @@
+
+---- SO TBA ELIG needs to be redone 
+
+-- If all of the underlying active pools in a platinum are 
+ 
+-- a. TBA eligible and of type M 
+ 
+-- Than the platinum is both TBA eligible and of type M
+ 
+-- b. TBA eligible and of type X
+ 
+-- Than the platinum is both TBA eligible and of type X
+ 
+-- If the pools are a mix of type X and M than the platinum is not TBA eligible
+ 
+-- So need some way to check pool type so step one
+-- Will be just to check all the pools in a plat 
+-- Step 2 will need to figure out some way of seeing if all indicators are m or x might need to use count
+
+-- so I think this is all i need for my temp table 
+-- we use platcolls to check if pools are TBA elig and if indicator is ALL X or ALL M 
+
+
+SELECT 
+    platcolls.cusip, 
+    platcolls.poolname, 
+    platcolls.indicator, 
+    pools.istbaelig,
+    CASE
+        WHEN platcolls.indicator = 'X' 
+            THEN true
+            ELSE false
+        END AS indicatorisx,
+    CASE
+        WHEN platcolls.indicator = 'M' 
+            THEN true
+            ELSE false
+        END AS indicatorism
+INTO TEMP TABLE platistbaelig
+FROM pools
+INNER JOIN platcolls
+ON platcolls.poolname = pools.name
+AND platcolls.indicator = pools.indicator
+WHERE platcolls.active =  'A'
+
+AND platcolls.cusip = '36241LKZ8'
+
+
+AND platcolls.cusip = '36241LKS4'
+
+
+SELECT * 
+FROM platistbaelig
+WHERE cusip = '3622A3BS8'
+
+--------now checking seems fine 
+
+-- so this gives me a table that will tell me if a plat is tba elig, if all it's sub pools are x or all m
+-- so I think that is all I need it would just need to be run and rerun until it finally stops 
+
+SELECT 
+    cusip, 
+    bool_and(platistbaelig.istbaelig) AS eligible,
+    bool_and(platistbaelig.indicatorisx) AS indicatorisx,
+    bool_and(platistbaelig.indicatorism) AS indicatorism
+FROM platistbaelig
+GROUP BY platistbaelig.cusip
+
+
+------------------ old is tba elig 
 -- i used this to check if all the active pools in a platinum are tbaelig
 
 SELECT cusip, bool_and(x.istbaelig) as eligible
