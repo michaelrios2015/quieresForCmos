@@ -20,52 +20,139 @@
 -- so I think this is all i need for my temp table 
 -- we use platcolls to check if pools are TBA elig and if indicator is ALL X or ALL M 
 
+--- pools & plats think I can do it all at once
+
+
+SELECT 
+    platinums.cusip, 
+    platinums.name, 
+    platinumbodies.indicator, 
+    platinumbodies.istbaelig,
+    platinumbodies.date
+INTO TEMP TABLE platcurr
+FROM platinums
+INNER JOIN platinumbodies
+ON platinumbodies.cusip = platinums.cusip
+WHERE platinumbodies.date = '2021-07-01';
+
 
 SELECT 
     platcolls.cusip, 
-    platcolls.poolname, 
-    platcolls.indicator, 
+    pools.name, 
+    pools.indicator, 
     pools.istbaelig,
     CASE
-        WHEN platcolls.indicator = 'X' 
-            THEN true
+        WHEN pools.indicator = 'X' THEN true
+        WHEN pools.indicator IS NULL THEN NULL
             ELSE false
-        END AS indicatorisx,
+        END AS poolindicatorisx,
     CASE
-        WHEN platcolls.indicator = 'M' 
-            THEN true
+        WHEN pools.indicator = 'M' THEN true
+        WHEN pools.indicator IS NULL THEN NULL
             ELSE false
-        END AS indicatorism
+        END AS poolindicatorism,    
+    platcurr.cusip AS platcusip,
+    platcurr.indicator AS platindicator,
+    platcurr.istbaelig AS platistbaelig,
+    CASE
+        WHEN platcurr.indicator = 'X' THEN true
+        WHEN platcurr.indicator IS NULL THEN NULL
+            ELSE false
+        END AS platindicatorisx,
+    CASE
+        WHEN platcurr.indicator = 'M' THEN true
+        WHEN platcurr.indicator IS NULL THEN NULL
+            ELSE false
+        END AS platindicatorism
 INTO TEMP TABLE platistbaelig
-FROM pools
-INNER JOIN platcolls
+FROM platcolls
+LEFT JOIN pools 
 ON platcolls.poolname = pools.name
 AND platcolls.indicator = pools.indicator
+LEFT JOIN platcurr
+ON platcolls.poolname = platcurr.name
 WHERE platcolls.active =  'A'
 
-AND platcolls.cusip = '36241LKZ8'
+AND platcolls.cusip = '36241LK62'
 
 
 AND platcolls.cusip = '36241LKS4'
 
 
+AND platcolls.cusip = '36241LKZ8'
+
+
+
+
+
+
 SELECT * 
 FROM platistbaelig
+WHERE cusip = '36241LK62'
+
+
 WHERE cusip = '3622A3BS8'
 
+LIMIT 2;
+
+--------------trying not to use
+
+-- SELECT 
+--     platcolls.cusip, 
+--     platcolls.poolname, 
+--     platcolls.indicator, 
+--     pools.istbaelig,
+--     CASE
+--         WHEN platcolls.indicator = 'X' 
+--             THEN true
+--             ELSE false
+--         END AS poolindicatorisx,
+--     CASE
+--         WHEN platcolls.indicator = 'M' 
+--             THEN true
+--             ELSE false
+--         END AS poolindicatorism
+-- -- INTO TEMP TABLE platistbaelig
+-- FROM platinumbodies
+-- INNER JOIN platcolls
+-- ON platcolls.poolname = pools.name
+-- AND platcolls.indicator = pools.indicator
+
+-- WHERE platcolls.active =  'A'
 --------now checking seems fine 
 
 -- so this gives me a table that will tell me if a plat is tba elig, if all it's sub pools are x or all m
 -- so I think that is all I need it would just need to be run and rerun until it finally stops 
 
+---So this seems to work
+
 SELECT 
     cusip, 
     bool_and(platistbaelig.istbaelig) AS eligible,
-    bool_and(platistbaelig.indicatorisx) AS indicatorisx,
-    bool_and(platistbaelig.indicatorism) AS indicatorism
+    bool_and(platistbaelig.poolindicatorisx) AS indicatorisx,
+    bool_and(platistbaelig.poolindicatorism) AS indicatorism,
+    bool_and(platistbaelig.platistbaelig) AS plateligible,
+    bool_and(platistbaelig.platindicatorisx) AS platindicatorisx,
+    bool_and(platistbaelig.platindicatorism) AS platindicatorism,    
+    bool_and(platistbaelig.istbaelig AND COALESCE(platistbaelig.platistbaelig, true)) AS bothistbaelig,
+    bool_and(platistbaelig.poolindicatorisx AND COALESCE(platistbaelig.platistbaelig, true)) AS bothindicatorisx,
+    bool_and(platistbaelig.poolindicatorism AND COALESCE(platistbaelig.platindicatorism, true)) AS bothindicatorism
 FROM platistbaelig
-GROUP BY platistbaelig.cusip
+WHERE cusip = '36241LK62'
+GROUP BY platistbaelig.cusip;
 
+
+
+\COPY (SELECT cusip, bool_and(platistbaelig.istbaelig) AS eligible, bool_and(platistbaelig.indicatorisx) AS indicatorisx, bool_and(platistbaelig.indicatorism) AS indicatorism FROM platistbaelig GROUP BY platistbaelig.cusip) to 'C:\Users\micha\patinums_istbaelig_round_one' csv header;
+
+--- redid platinums and platinums bodies table checking to make sure basics are right
+SELECT * 
+FROM platinums
+INNER JOIN platinumbodies
+ON platinums.cusip = platinumbodies.cusip
+LIMIT 2;
+
+-- ok so far
 
 ------------------ old is tba elig 
 -- i used this to check if all the active pools in a platinum are tbaelig
@@ -80,6 +167,8 @@ FROM (
 	WHERE platcolls.active =  'A'
  	) AS x
 GROUP BY x.cusip
+
+
 
 
 ----------- same thing with temp table does active matter?? We don't know if I am saying it is a permenant
