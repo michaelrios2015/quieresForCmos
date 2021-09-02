@@ -23,6 +23,8 @@
 --- pools & plats think I can do it all at once
 
 
+-- make these two temp tables 
+
 SELECT 
     platinums.cusip, 
     platinums.name, 
@@ -64,16 +66,17 @@ SELECT
         WHEN platcurr.indicator IS NULL THEN NULL
             ELSE false
         END AS platindicatorism
-INTO TEMP TABLE platistbaelig
+-- INTO TEMP TABLE platistbaelig 
 FROM platcolls
+INNER JOIN platcurr AS currfilter
+ON platcolls.cusip = currfilter.cusip
 LEFT JOIN pools 
 ON platcolls.poolname = pools.name
 AND platcolls.indicator = pools.indicator
 LEFT JOIN platcurr
 ON platcolls.poolname = platcurr.name
 WHERE platcolls.active =  'A'
-
-AND platcolls.cusip = '36241LK62'
+AND platcolls.cusip = '3622AAXS8'
 
 
 AND platcolls.cusip = '36241LKS4'
@@ -81,7 +84,18 @@ AND platcolls.cusip = '36241LKS4'
 
 AND platcolls.cusip = '36241LKZ8'
 
+-- this is M in platmonPPS 2017
+AND platcolls.cusip = '3622AAXS8'
 
+-- because 
+
+3622AAXS8 | BD8879 | C
+
+-- it's avctive it has a C indicator sooooo I assume this is right
+   
+   cusip   | poolname | indicator | faceinplatinum | active |    born    | terminated
+-----------+----------+-----------+----------------+--------+------------+------------
+ 3622AAXS8 | BD8879   | C         |      150000000 | A      | 2021-05-01 |
 
 
 
@@ -138,12 +152,33 @@ SELECT
     bool_and(platistbaelig.poolindicatorisx AND COALESCE(platistbaelig.platistbaelig, true)) AS bothindicatorisx,
     bool_and(platistbaelig.poolindicatorism AND COALESCE(platistbaelig.platindicatorism, true)) AS bothindicatorism
 FROM platistbaelig
-WHERE cusip = '36241LK62'
+WHERE cusip = '36225A3V0'
 GROUP BY platistbaelig.cusip;
 
 
 
-\COPY (SELECT cusip, bool_and(platistbaelig.istbaelig) AS eligible, bool_and(platistbaelig.indicatorisx) AS indicatorisx, bool_and(platistbaelig.indicatorism) AS indicatorism FROM platistbaelig GROUP BY platistbaelig.cusip) to 'C:\Users\micha\patinums_istbaelig_round_one' csv header;
+-------------------
+
+-- slimmed down version now accomodates those with no pools
+
+SELECT 
+    cusip, 
+    bool_and(COALESCE(platistbaelig.istbaelig, true) AND COALESCE(platistbaelig.platistbaelig, true)) AS bothistbaelig,
+    bool_and(COALESCE(platistbaelig.poolindicatorisx, true)  AND COALESCE(platistbaelig.platindicatorisx, true)) AS bothindicatorisx,
+    bool_and(COALESCE(platistbaelig.poolindicatorism, true)  AND COALESCE(platistbaelig.platindicatorism, true)) AS bothindicatorism
+FROM platistbaelig
+WHERE cusip = '36241L4G8'
+GROUP BY platistbaelig.cusip;
+
+
+-- run this use it to update platinum bodies 
+
+\COPY (SELECT cusip, bool_and(COALESCE(platistbaelig.istbaelig, true) AND COALESCE(platistbaelig.platistbaelig, true)) AS bothistbaelig, bool_and(COALESCE(platistbaelig.poolindicatorisx, true)  AND COALESCE(platistbaelig.platindicatorisx, true)) AS bothindicatorisx, bool_and(COALESCE(platistbaelig.poolindicatorism, true)  AND COALESCE(platistbaelig.platindicatorism, true)) AS bothindicatorism FROM platistbaelig GROUP BY platistbaelig.cusip) to 'C:\Users\micha\patinums_istbaelig_round_one' csv header;
+
+-- earse the two temp tables rerun them repeat till no updates reported 
+
+
+\COPY (SELECT * FROM platinumbodies where date = '2021/07/01') to 'C:\Users\micha\patinumsbodies202107' csv header;
 
 --- redid platinums and platinums bodies table checking to make sure basics are right
 SELECT * 
