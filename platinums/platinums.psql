@@ -1,46 +1,5 @@
------------ same thing with temp table does active matter?? We don't know if I am saying it is a permenant
--- character than it probably does not matter but I already did it this way??
 
-Select platcolls.cusip, platcolls.poolname, platcolls.indicator, pools.istbaelig
-INTO TEMP TABLE poolsforistbaelig 
-FROM pools
-INNER JOIN platcolls
-ON platcolls.poolname = pools.name
-AND platcolls.indicator = pools.indicator
-WHERE platcolls.active =  'A'
-
-
-SELECT cusip, bool_and(poolsforistbaelig.istbaelig) as eligible
-FROM poolsforistbaelig
-GROUP BY poolsforistbaelig.cusip
-
-\copy (SELECT cusip, bool_and(poolsforistbaelig.istbaelig) as eligible FROM poolsforistbaelig GROUP BY poolsforistbaelig.cusip)  to 'C:\Users\micha\patinums_istbaelig_round_one' csv header;
-
-------------checking platinums against platinums
-
--- temp table 
-
-SELECT platcolls.cusip, platcolls.poolname, platcolls.indicator, platinums.istbaelig
-INTO TEMP TABLE platsforistbaelig 
-FROM platinums
-INNER JOIN platcolls
-ON platcolls.poolname = platinums.name
-AND platcolls.indicator = platinums.indicator
-WHERE platcolls.active =  'A'
-AND platinums.istbaelig IS NOT NULL
-
-SELECT cusip, bool_and(platsforistbaelig.istbaelig) as eligible
-FROM platsforistbaelig 
-GROUP BY platsforistbaelig.cusip
-
-\copy (SELECT cusip, bool_and(platsforistbaelig.istbaelig) as eligible FROM platsforistbaelig GROUP BY platsforistbaelig.cusip)  to 'C:\Users\micha\patinums_istbaelig_round_two' csv header;
-
-
--- I have been cheating about the loop through should try and figure out a while loop one of these days
-
----------------------------------------------------
-
--- I can copy an dpast this and it seems to work 
+---all need to be refactored ...
 
 ---------------------------------
 

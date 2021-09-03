@@ -1,6 +1,3 @@
--- so my current cpr things are essentialy indecpheribale
--- it's not that bad taking them apart and puting them back together but it will take time and care...
-
 -- The formula
 
 -- SMM = 1 - Power( 1 - CPR / 100, 1/12 ) - so even a minor error in CPR can cause major
@@ -23,26 +20,8 @@
 
 -- Use SMM to CPR formula
 
--- Step one we are given not sure if we are just using what is give or calculating on our own
+--- first time should be able to COPY and paste the whole thing run these
 
--- Step 1 :   Current face of each platinum for month m (We are actually given this as remainingBalance)
-
-
--- = sum   original face of pool i in the platinum (faceinplatinum from platcoll) * factor of pool i for month m (current face:remaining balance / original face) 
-
-
--- 36225AGW4 | 780213 | X         | SP   |  19950801 |     20250815 |    168804011 | t         | 36225AGW4 |          7.5 |        167159.35 | 0.00099025 |    8 |  36 |  319 | 0.10590061371125192 | 2021-06-01
-
--- Pool factor looks right
-
--- SUM(platcolls.faceinplatinum * (currpools."remainingBalance"/currpools.originalface)) AS currface,
-
--- we get the current face of each pool so this is either to test the logic or because it is more accurate not sure
-
-----making temp tables
--- what we need from pools
--- name and indicator to join with platcoll
--- original face and remaining balance 
 SELECT
     pools.cusip,
     pools.name,
@@ -54,9 +33,8 @@ FROM
     pools
     INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
 WHERE
-    poolbodies.date = '2021-07-01'
+    poolbodies.date = '2021-07-01';
 
-LIMIT 2;
 
 -- what we need from plats
 
@@ -70,29 +48,22 @@ FROM
     platinums
     INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
 WHERE
-    platinumbodies.date = '2021-07-01'
+    platinumbodies.date = '2021-07-01';
 
 
 -- combining the two 
+
 SELECT
     platcolls.cusip AS platcusip,
     platcolls.poolname,
     platcolls.indicator,
     platcolls.faceinplatinum,
     currpoolscpr.cusip as poolcusip,
-    -- currpoolscpr.name,
-    -- currpoolscpr.indicator,
-    -- currpoolscpr.originalface,
-    -- currpoolscpr."remainingBalance",
     currpoolscpr."remainingBalance" / currpoolscpr.originalface AS poolfactor,
     platcolls.faceinplatinum * (
     currpoolscpr."remainingBalance" / currpoolscpr.originalface
     ) AS ofxfactor,
     currplatscpr.cusip  as platinplatcusip,
-    -- currplatscpr.name,
-    -- currplatscpr.indicator,
-    -- currplatscpr.originalface,
-    -- currplatscpr.remainingbalance,
     currplatscpr.remainingbalance / currplatscpr.originalface AS platfactor,
     platcolls.faceinplatinum * (
     currplatscpr.remainingbalance / currplatscpr.originalface
@@ -108,9 +79,7 @@ WHERE
     (
     currpoolscpr.cusip IS NOT NULL
     OR currplatscpr.cusip IS NOT NULL
-    )
-
-LIMIT 10;
+    );
 
 -- Seems to work not sure if we want to use 
 -- might want to put a date in here 
@@ -124,185 +93,8 @@ INTO TEMP TABLE platcurrfacecpr
 FROM ofxfactorcpr
 -- WHERE platcusip = '36225A2E9'
 GROUP BY
-  platcusip
+  platcusip;
 
-
-
-
-
-
--- Step 2 :   Weight of each pool i in platinum for the month m (we are given this too but calculating is a bit more accurate)
-
--- = original face of pool i in the platinum (face in platinum: from platcolls) * factor of pool i for month m (current face:remaining balance / original face)  /  Current face of platinum for month m
-
--- This seems to check out 
-
--- I have no clue what I did here 
-
-SELECT
-  platcolls.cusip,
-  platcolls.poolname,
-  platcolls.indicator,
-  platcolls.faceinplatinum,
-  platcurrfacecpr.currface as platcurrentface,
-  currpoolscpr.cusip as poolcusip,
-  currpoolscpr.originalface,
-  currpoolscpr."remainingBalance",
-  currpoolscpr."remainingBalance" / currpoolscpr.originalface AS poolfactor,
-  platcolls.faceinplatinum * (
-    currpoolscpr."remainingBalance" / currpoolscpr.originalface
-  ) AS ofofpoolinplattimesfactor,
-  (
-    platcolls.faceinplatinum * (
-      currpoolscpr."remainingBalance" / currpoolscpr.originalface
-    )
-  ) / platcurrfacecpr.currface AS weightofpool,
-  currplatscpr.cusip as platcusip,
-  currplatscpr.originalface AS platoriginalface,
-  currplatscpr.remainingbalance AS platremainingbalance,
-  currplatscpr.remainingbalance / currplatscpr.originalface AS platfactor,
-  platcolls.faceinplatinum * (currplatscpr.remainingbalance / currplatscpr.originalface) AS ofofplatinplattimesfactor,
-  (
-    platcolls.faceinplatinum * (currplatscpr.remainingbalance / currplatscpr.originalface)
-  ) / platcurrfacecpr.currface AS weightofplat
-INTO TEMP TABLE steptwo
-FROM
-  platcolls
-INNER JOIN platcurrfacecpr
-  ON platcolls.cusip = platcurrfacecpr.platcusip
-LEFT JOIN currpoolscpr 
-  ON platcolls.poolname = currpoolscpr.name
-  AND platcolls.indicator = currpoolscpr.indicator
-LEFT JOIN currplatscpr 
-  ON platcolls.poolname = currplatscpr.name
-WHERE
-  (
-    currpoolscpr.cusip IS NOT NULL
-    OR currplatscpr.cusip IS NOT NULL
-  )
-  -- stops divide by zero error
-  AND platcurrfacecpr.currface > 0
-  
-  
-  AND platcolls.cusip = '36225A2E9';
-
-
--- weights seem to sum to 100ish
-
-SELECT
-  cusip,
-  SUM(steptwonotsummed.weightofpool),
-  SUM(steptwonotsummed.weightofplat)
-FROM steptwonotsummed 
-GROUP BY
-  cusip
-LIMIT
-  10;
-
-
-
--- the old way 
-
-SELECT
-  SUM(x.weightofpool),
-  SUM(x.weightofplat)
-FROM
-  (
-    SELECT
-      platcolls.cusip,
-      platcolls.poolname,
-      platcolls.indicator,
-      platcolls.faceinplatinum,
-      plattcurrentface.remainingbalance as platcurrentface,
-      currpool.cusip as poolcusip,
-      currpool.originalface,
-      currpool."remainingBalance",
-      currpool."remainingBalance" / currpool.originalface AS poolfactor,
-      platcolls.faceinplatinum * (
-        currpool."remainingBalance" / currpool.originalface
-      ) AS ofofpoolinplattimesfactor,
-      (
-        platcolls.faceinplatinum * (
-          currpool."remainingBalance" / currpool.originalface
-        )
-      ) / plattcurrentface.remainingbalance AS weightofpool,
-      currplat.cusip as platcusip,
-      currplat.originalface,
-      currplat.remainingbalance,
-      currplat.remainingbalance / currplat.originalface AS platfactor,
-      platcolls.faceinplatinum * (currplat.remainingbalance / currplat.originalface) AS ofofplatinplattimesfactor,
-      (
-        platcolls.faceinplatinum * (currplat.remainingbalance / currplat.originalface)
-      ) / plattcurrentface.remainingbalance AS weightofplat
-    FROM steptwonotsummed
-      platcolls
-      INNER JOIN (
-        SELECT
-          cusip,
-          remainingbalance
-        FROM
-          platinumbodies
-        WHERE
-          date = '2021-06-01'
-      ) as plattcurrentface ON platcolls.cusip = plattcurrentface.cusip
-      LEFT JOIN (
-        SELECT
-          pools.cusip,
-          pools.name,
-          pools.indicator,
-          pools.originalface,
-          poolbodies."remainingBalance"
-        FROM
-          pools
-          INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
-        WHERE
-          date = '2021-06-01'
-      ) AS currpool ON platcolls.poolname = currpool.name
-      AND platcolls.indicator = currpool.indicator
-      LEFT JOIN (
-        SELECT
-          platinums.cusip,
-          platinums.name,
-          platinums.indicator,
-          platinums.originalface,
-          platinumbodies.remainingbalance
-        FROM
-          platinums
-          INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
-        WHERE
-          date = '2021-06-01'
-      ) AS currplat ON platcolls.poolname = currplat.name
-      AND platcolls.indicator = currplat.indicator
-    WHERE
-      (
-        currpool.cusip IS NOT NULL
-        OR currplat.cusip IS NOT NULL
-      )
-      AND platcolls.cusip = '36225A2E9'
-  ) AS x
-LIMIT
-  10;
-
-
--- SMM = 1 - Power( 1 - CPR / 100, 1/12 )
-
--- Step 3 :   SMM of platinum for month m+1
-
--- = sum weight of each pool i for month m  * SMM of pool i for month m+1
-
--- OK this is where I stopped because I finally realized that we had no CPRS for the platinums...
--- So now I need to erase my 
-
--- Got the pool cprs
-
--- Now need to redo platinum bodies
-
--- Have bodies now to sum
-
--- coalesce(sum(value),0)
-
--- Seems to work
--- OK BACK TO the drawing board NO this works need to pu
 
  SELECT
   currpoolscpr.cusip,
@@ -316,9 +108,12 @@ FROM
   currpoolscpr
   -- I guess it needs to be inner join becuase we need a cpr??
 INNER JOIN poolpredictions ON currpoolscpr.cusip = poolpredictions.cusip
-WHERE poolpredictions.date = '2021-08-01'
+WHERE poolpredictions.date = '2021-08-01';
 
-DROP TABLE currplatswithcpr, almoststepthree, stepthree;
+
+---------------------------------------------------------------------
+-- after first time uncomment from here and run 
+-- DROP TABLE currplatswithcpr, almoststepthree, stepthree;
 
 SELECT
   platinums.cusip,
@@ -332,7 +127,6 @@ FROM
   INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
 WHERE
   date = '2021-07-01';
-
 
 
 SELECT
@@ -425,314 +219,6 @@ GROUP BY
   almoststepthree.cusip;
 
 
-\COPY (SELECT cusip, (1 - POWER((1 - smm), 12)) as cpr FROM stepthree) to 'C:\Users\micha\platcpr' csv header; 
+-- \COPY (SELECT cusip, (1 - POWER((1 - smm), 12)) as cpr FROM stepthree) to 'C:\Users\micha\platcpr' csv header; 
 
-
-----seems to get smms
-
-SELECT
-  almoststepthree.cusip,
-  SUM(
-    COALESCE(weightofpool, 0) + COALESCE(weightofplat, 0)
-  ) AS sumofweight,
-  SUM(
-    COALESCE(weightxpoolssm, 0) + COALESCE(weightxplatssm, 0)
-  ) AS smm
-FROM almoststepthree
-GROUP BY
-  almoststepthree.cusip
-
-
----------------- OLD WAY
-SELECT
-  x.cusip,
-  SUM(
-    COALESCE(weightofpool, 0) + COALESCE(weightofplat, 0)
-  ),
-  SUM(
-    COALESCE(x.weightxpoolssm, 0) + COALESCE(x.weightxplatssm, 0)
-  ) AS smm
-FROM
-  (
-    SELECT
-      platcolls.cusip,
-      platcolls.poolname,
-      platcolls.indicator,
-      currpool.cusip as poolcusip,
-      (
-        platcolls.faceinplatinum * (
-          currpool."remainingBalance" / currpool.originalface
-        )
-      ) / plattcurrentface.remainingbalance AS weightofpool,
-      currpool.actualcpr,
-      (
-        1 -(
-          POWER(
-            (1 -(currpool.actualcpr)),
-            (cast(1 as float) / cast(12 as float))
-          )
-        )
-      ) AS poolsmm,
-      (
-        (
-          platcolls.faceinplatinum * (
-            currpool."remainingBalance" / currpool.originalface
-          )
-        ) / plattcurrentface.remainingbalance
-      ) * (
-        1 -(
-          POWER(
-            (1 -(currpool.actualcpr)),
-            (cast(1 as float) / cast(12 as float))
-          )
-        )
-      ) as weightxpoolssm,
-      currplat.cusip as platcusip,
-      (
-        platcolls.faceinplatinum * (currplat.remainingbalance / currplat.originalface)
-      ) / plattcurrentface.remainingbalance AS weightofplat,
-      currplat.cpr,
-      (
-        1 -(
-          POWER(
-            (1 -(currplat.cpr)),
-            (cast(1 as float) / cast(12 as float))
-          )
-        )
-      ) AS platsmm,
-      (
-        (
-          platcolls.faceinplatinum * (currplat.remainingbalance / currplat.originalface)
-        ) / plattcurrentface.remainingbalance
-      ) * (
-        1 -(
-          POWER(
-            (1 -(currplat.cpr)),
-            (cast(1 as float) / cast(12 as float))
-          )
-        )
-      ) as weightxplatssm
-    FROM
-      platcolls
-      INNER JOIN (
-        SELECT
-          cusip,
-          remainingbalance
-        FROM
-          platinumbodies
-        WHERE
-          date = '2021-06-01'
-      ) as plattcurrentface ON platcolls.cusip = plattcurrentface.cusip
-      LEFT JOIN (
-        SELECT
-          pools.cusip,
-          pools.name,
-          pools.indicator,
-          pools.originalface,
-          poolbodies."remainingBalance",
-          actualcprs.actualcpr
-        FROM
-          pools
-          INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
-          INNER JOIN actualcprs ON pools.cusip = actualcprs.cusip
-        WHERE
-          poolbodies.date = '2021-06-01'
-          AND actualcprs.date = '2021-07-01'
-      ) AS currpool ON platcolls.poolname = currpool.name
-      AND platcolls.indicator = currpool.indicator
-      LEFT JOIN (
-        SELECT
-          platinums.cusip,
-          platinums.name,
-          platinums.indicator,
-          platinums.originalface,
-          platinumbodies.remainingbalance,
-          platinumbodies.cpr
-        FROM
-          platinums
-          INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
-        WHERE
-          date = '2021-06-01'
-      ) AS currplat ON platcolls.poolname = currplat.name
-      AND platcolls.indicator = currplat.indicator
-    WHERE
-      (
-        currpool.cusip IS NOT NULL
-        OR currplat.cusip IS NOT NULL
-      )
-      AND platcolls.cusip = '36225A2E9'
-    ORDER BY
-      platcolls.poolname
-  ) AS x
-GROUP BY
-  x.cusip
-
-
-
--- Good mixed one 
--- 36225A2E9
-
--- Test one
--- 36241LZS8
--- Inner Joining actual CPRS to pools because if it does not have a cpr we can’t do the calculation so not point in including those 
-
--- CPR = 1 - power( 1- SMM, 12 )
-
-
--- Step 4 : CPR of the platinum for month m+1
-
--- Use SMM to CPR formula
-
--- Seems to give me the same answer as the one with just pools 
-
--- Hopefully working now at at least doing something needs to be changes to copy 
-
-
-SELECT
-  almoststepthree.cusip,
-  -- not sure why we divide by 100
-  SUM(
-    COALESCE(almoststepthree.weightxpoolssm, 0) + COALESCE(almoststepthree.weightxplatssm, 0)
-  ) / 100 AS smm
-INTO TEMP TABLE stepthree
-FROM almoststepthree
-GROUP BY
-  almoststepthree.cusip
-
-SELECT
-  cusip,
-  (1 - POWER((1 - smm), 12)) as cpr
-FROM stepthree
-
-
-\COPY (SELECT cusip, (1 - POWER((1 - smm), 12)) as cpr FROM stepthree) to 'C:\Users\micha\platcpr' csv header; 
- 
-
-
----- old way
-SELECT
-  y.cusip,
-  (1 - POWER((1 - y.smm), 12)) as cpr
-FROM
-  (
-    SELECT
-      x.cusip,
-      SUM(
-        COALESCE(x.weightxpoolssm, 0) + COALESCE(x.weightxplatssm, 0)
-      ) / 100 AS smm
-    FROM
-      (
-        SELECT
-          platcolls.cusip,
-          platcolls.poolname,
-          platcolls.indicator,
-          currpool.cusip as poolcusip,
-          (
-            platcolls.faceinplatinum * (
-              currpool."remainingBalance" / currpool.originalface
-            )
-          ) / plattcurrentface.remainingbalance AS weightofpool,
-          currpool.actualcpr,
-          (
-            1 -(
-              POWER(
-                (1 -(currpool.actualcpr)),
-                (cast(1 as float) / cast(12 as float))
-              )
-            )
-          ) AS poolsmm,
-          (
-            (
-              platcolls.faceinplatinum * (
-                currpool."remainingBalance" / currpool.originalface
-              )
-            ) / plattcurrentface.remainingbalance
-          ) * (
-            1 -(
-              POWER(
-                (1 -(currpool.actualcpr)),
-                (cast(1 as float) / cast(12 as float))
-              )
-            )
-          ) as weightxpoolssm,
-          currplat.cusip as platcusip,
-          (
-            platcolls.faceinplatinum * (currplat.remainingbalance / currplat.originalface)
-          ) / plattcurrentface.remainingbalance AS weightofplat,
-          currplat.cpr,
-          (
-            1 -(
-              POWER(
-                (1 -(currplat.cpr)),
-                (cast(1 as float) / cast(12 as float))
-              )
-            )
-          ) AS platsmm,
-          (
-            (
-              platcolls.faceinplatinum * (currplat.remainingbalance / currplat.originalface)
-            ) / plattcurrentface.remainingbalance
-          ) * (
-            1 -(
-              POWER(
-                (1 -(currplat.cpr)),
-                (cast(1 as float) / cast(12 as float))
-              )
-            )
-          ) as weightxplatssm
-        FROM
-          platcolls
-          INNER JOIN (
-            SELECT
-              cusip,
-              remainingbalance
-            FROM
-              platinumbodies
-            WHERE
-              date = '2021-06-01'
-          ) as plattcurrentface ON platcolls.cusip = plattcurrentface.cusip
-          LEFT JOIN (
-            SELECT
-              pools.cusip,
-              pools.name,
-              pools.indicator,
-              pools.originalface,
-              poolbodies."remainingBalance",
-              actualcprs.actualcpr
-            FROM
-              pools
-              INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
-              INNER JOIN actualcprs ON pools.cusip = actualcprs.cusip
-            WHERE
-              poolbodies.date = '2021-06-01'
-              AND actualcprs.date = '2021-07-01'
-          ) AS currpool ON platcolls.poolname = currpool.name
-          AND platcolls.indicator = currpool.indicator
-          LEFT JOIN (
-            SELECT
-              platinums.cusip,
-              platinums.name,
-              platinums.indicator,
-              platinums.originalface,
-              platinumbodies.remainingbalance,
-              platinumbodies.cpr
-            FROM
-              platinums
-              INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
-            WHERE
-              date = '2021-06-01'
-          ) AS currplat ON platcolls.poolname = currplat.name
-          AND platcolls.indicator = currplat.indicator
-        WHERE
-          (
-            currpool.cusip IS NOT NULL
-            OR currplat.cusip IS NOT NULL
-          )
-          AND platcolls.cusip = '3622AANM2'
-        ORDER BY
-          platcolls.poolname
-      ) AS x
-    GROUP BY
-      x.cusip
-  ) AS y
 

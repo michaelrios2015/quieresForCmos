@@ -1,0 +1,99 @@
+
+---- SO TBA ELIG needs to be redone 
+
+-- If all of the underlying active pools in a platinum are 
+ 
+-- a. TBA eligible and of type M 
+ 
+-- Than the platinum is both TBA eligible and of type M
+ 
+-- b. TBA eligible and of type X
+ 
+-- Than the platinum is both TBA eligible and of type X
+ 
+-- If the pools are a mix of type X and M than the platinum is not TBA eligible
+ 
+-- So need some way to check pool type so step one
+-- Will be just to check all the pools in a plat 
+-- Step 2 will need to figure out some way of seeing if all indicators are m or x might need to use count
+
+-- so I think this is all i need for my temp table 
+-- we use platcolls to check if pools are TBA elig and if indicator is ALL X or ALL M 
+
+--- pools & plats think I can do it all at once
+
+-- make these two temp tables 
+
+-- SWITCH DATES and run till no more chnages 
+
+DROP TABLE platcurr, platistbaelig, platistbaeligoutput 
+
+SELECT 
+    platinums.cusip, 
+    platinums.name, 
+    platinumbodies.indicator, 
+    platinumbodies.istbaelig,
+    platinumbodies.date
+INTO TEMP TABLE platcurr
+FROM platinums
+INNER JOIN platinumbodies
+ON platinumbodies.cusip = platinums.cusip
+WHERE platinumbodies.date = '2021-07-01';
+
+
+SELECT 
+    platcolls.cusip, 
+    pools.name, 
+    pools.indicator, 
+    pools.istbaelig,
+    CASE
+        WHEN pools.indicator = 'X' THEN true
+        WHEN pools.indicator IS NULL THEN NULL
+            ELSE false
+        END AS poolindicatorisx,
+    CASE
+        WHEN pools.indicator = 'M' THEN true
+        WHEN pools.indicator IS NULL THEN NULL
+            ELSE false
+        END AS poolindicatorism,    
+    platcurr.cusip AS platcusip,
+    platcurr.indicator AS platindicator,
+    platcurr.istbaelig AS platistbaelig,
+    CASE
+        WHEN platcurr.indicator = 'X' THEN true
+        WHEN platcurr.indicator IS NULL THEN NULL
+            ELSE false
+        END AS platindicatorisx,
+    CASE
+        WHEN platcurr.indicator = 'M' THEN true
+        WHEN platcurr.indicator IS NULL THEN NULL
+            ELSE false
+        END AS platindicatorism
+INTO TEMP TABLE platistbaelig 
+FROM platcolls
+INNER JOIN platcurr AS currfilter
+ON platcolls.cusip = currfilter.cusip
+LEFT JOIN pools 
+ON platcolls.poolname = pools.name
+AND platcolls.indicator = pools.indicator
+LEFT JOIN platcurr
+ON platcolls.poolname = platcurr.name
+WHERE platcolls.active =  'A';
+
+-------------------
+
+-- slimmed down version now accomodates those with no pools
+
+SELECT 
+    cusip, 
+    bool_and(COALESCE(platistbaelig.istbaelig, true) AND COALESCE(platistbaelig.platistbaelig, true)) AS bothistbaelig,
+    bool_and(COALESCE(platistbaelig.poolindicatorisx, true)  AND COALESCE(platistbaelig.platindicatorisx, true)) AS bothindicatorisx,
+    bool_and(COALESCE(platistbaelig.poolindicatorism, true)  AND COALESCE(platistbaelig.platindicatorism, true)) AS bothindicatorism
+INTO TEMP TABLE platistbaeligoutput
+FROM platistbaelig
+GROUP BY platistbaelig.cusip;
+
+
+-- run this use it to update platinum bodies 
+
+\COPY (SELECT * FROM platistbaeligoutput) to 'C:\Users\micha\patinums_istbaelig_round_one' csv header;
