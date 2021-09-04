@@ -78,6 +78,7 @@ ON platcolls.poolname = pools.name
 AND platcolls.indicator = pools.indicator
 LEFT JOIN platcurr
 ON platcolls.poolname = platcurr.name
+---can probably use born and terminated dates 
 WHERE platcolls.active =  'A';
 
 -------------------
