@@ -114,7 +114,7 @@ WHERE poolpredictions.date = '2021-08-01';
 
 ---------------------------------------------------------------------
 -- after first time uncomment from here and run 
--- DROP TABLE currplatswithcpr, almoststepthree, stepthree;
+DROP TABLE currplatswithcpr, almoststepthree, stepthree, stepfour;
 
 SELECT
   platinums.cusip,
@@ -230,34 +230,18 @@ SELECT
   cusip, 
   (1 - POWER((1 - smm), 12)) AS cpr 
   INTO TEMP TABLE stepfour
-  FROM stepthree
+  FROM stepthree;
 
 
-
--- THIS will print to a column
-
-SELECT *,
-CASE
-  WHEN stepfour.cpr = platinumbodies.cpr THEN 'CPRS ARE EQUAL'
-  ELSE 'CPRS are NOT eqaul'
-END
-FROM stepfour
-INNER JOIN platinumbodies
-ON stepfour.platinumcusip = platinumbodies.cusip
-WHERE platinumbodies.date = '2021-06-01'
-LIMIT 1;
+----- so I can run everything above this 
 
 
-
-
---- this can erease all the cprs
-UPDATE platinumbodies
-SET cpr = NULL
-WHERE platinumbodies.date = '2021-05-01';
 
 
 --- This will update platinum bodies cprs which is quite nice but i will not know id anything has changed
 -- so I can just run it a bunch of times keep updating 
+
+--- Then run this 
 
 UPDATE platinumbodies
 SET cpr = stepfour.cpr
@@ -266,6 +250,12 @@ WHERE stepfour.cusip = platinumbodies.cusip
 AND platinumbodies.date = '2021-07-01';
 
 
+---then go to the second part and rerun it 
+
+
+
+-- in theory I can use this each time to check it in practice I can probably just run it a couple of times
+-- then start checking that my table four is different from my platinum bodies  
 
 ---------- so I can use this to see if the tables are equal then run the above to update then rerun the query
 -- that should be less copying and pasting... i think 
