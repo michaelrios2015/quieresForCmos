@@ -3,31 +3,36 @@
 
 -- for this i think we just need pools, plats and platcolls all on the same page 
 
--- The formula
+-- THE FORMULA 
 
--- SMM = 1 - Power( 1 - CPR / 100, 1/12 ) - so even a minor error in CPR can cause major
+-- SMM = 1 - Power( 1 - CPR / 100, 1/12 ) 
+
 
 -- CPR = 1 - power( 1- SMM, 12 )
 
--- Step 1 :   Current face of each platinum for month m (We are actually given this as remainingBalance)
 
--- = sum   original face of pool i in the platinum * factor of pool i for month m
+-- Step 1 :   Current face of each CMO for month m 
 
--- Step 2 :   Weight of each pool i in platinum for the month m (we are given this too but calculating is a bit more accurate)
 
--- = original face of pool i in the platinum * factor of pool i for month m  /  Current face of platinum for month m
+-- = sum   original face of pool i in the CMO * factor of pool i for month m
 
--- Step 3 :   SMM of platinum for month m+1
+
+-- Step 2 :   Weight of each pool i in CMO for the month m 
+
+
+-- = original face of pool i in the CMO * factor of pool i for month m  /  Current face of CMO for month m
+
+
+-- Step 3 :   SMM of CMO for month m+1
+
 
 -- = sum weight of each pool i for month m  * SMM of pool i for month m+1
 
--- Step 4 : CPR of the platinum for month m+1
+
+-- Step 4 : CPR of the CMO for month m+1
+
 
 -- Use SMM to CPR formula
-
---- first time should be able to COPY and paste the whole thing run these
-
--- we only have one actual cpr from july so we are trying it with our june ginnie mae data
 
 SELECT
     pools.cusip,
@@ -59,69 +64,60 @@ WHERE
 
 
 
-SELECT
-    platcolls.cusip AS platcusip,
-    platcolls.poolname,
-    platcolls.indicator,
-    platcolls.faceinplatinum,
-    platcolls.born   
-INTO TEMP TABLE platcollsweneed 
-FROM
-    platcolls
-WHERE
-    platcolls.born <= '2021-06-01';
-
--- LIMIT 2;
 
 
+-- need to redo 
 
-
-
--- combining the two to get current face of plats for month m 
+-- combining the two to get current face of plats or pools?? for month m 
 
 SELECT
-    platcollsweneed.platcusip,
-    platcollsweneed.poolname,
-    platcollsweneed.indicator,
-    platcollsweneed.faceinplatinum,
+    ofincmos.cmo,
+    ofincmos.cusip,
+    ofincmos.faceincmo,
+    -- not realy sure how we are using date 
+    ofincmos.date,
     currpoolscpr.cusip as poolcusip,
     currpoolscpr."remainingBalance" / currpoolscpr.originalface AS poolfactor,
-    platcollsweneed.faceinplatinum * (
+    ofincmos.faceincmo * (
     currpoolscpr."remainingBalance" / currpoolscpr.originalface
     ) AS ofxfactor,
     currplatscpr.cusip  as platinplatcusip,
     currplatscpr.remainingbalance / currplatscpr.originalface AS platfactor,
-    platcollsweneed.faceinplatinum * (
+    ofincmos.faceincmo * (
     currplatscpr.remainingbalance / currplatscpr.originalface
     ) AS ofplatxfactor
-INTO TEMP TABLE ofxfactorcpr
+INTO TEMP TABLE ofxfactorcprcmo
 -- so I should be able to make this it's own table limit by born date and be fine
 FROM
-    platcollsweneed
+    ofincmos
 LEFT JOIN currpoolscpr 
-ON platcollsweneed.poolname = currpoolscpr.name
-AND platcollsweneed.indicator = currpoolscpr.indicator
-LEFT JOIN currplatscpr ON platcollsweneed.poolname = currplatscpr.name
+ON ofincmos.cusip = currpoolscpr.cusip
+LEFT JOIN currplatscpr 
+ON ofincmos.cusip = currplatscpr.cusip
 WHERE
     (
     currpoolscpr.cusip IS NOT NULL
     OR currplatscpr.cusip IS NOT NULL
     );
 
+-- LIMIT 2;
+
 -- Seems to work not sure if we want to use 
 -- might want to put a date in here 
+-- curent face of ech cmo STEP 1
 
 SELECT
-  platcusip,
+  cmo,
   SUM(
     COALESCE(ofxfactor, 0) + COALESCE(ofplatxfactor, 0)
   ) / 100 AS currface
-INTO TEMP TABLE platcurrfacecpr
-FROM ofxfactorcpr
--- WHERE platcusip = '36225A2E9'
+INTO TEMP TABLE cmocurrfacecpr
+FROM ofxfactorcprcmo
+-- WHERE cmo = '1999-004-1'
 GROUP BY
-  platcusip;
+  cmo;
 
+-- just adding cpr to pools but it is july's do I have plats for june or july??
 
  SELECT
   currpoolscpr.cusip,
@@ -141,7 +137,7 @@ WHERE actualcprs.date = '2021-07-01';
 
 ---------------------------------------------------------------------
 -- after first time uncomment from here and run 
-DROP TABLE currplatswithcpr, almoststepthree, stepthree;
+-- DROP TABLE currplatswithcpr, almoststepthree, stepthree;
 
 SELECT
   platinums.cusip,
@@ -157,17 +153,47 @@ WHERE
   date = '2021-06-01';
 
 
+
+-- Step 2 :   Weight of each pool i in CMO for the month m 
+
+
+-- = original face of pool i in the CMO * factor of pool i for month m  /  Current face of CMO for month m
+
+
 SELECT
-  platcollsweneed.platcusip AS platinumcusip,
-  platcollsweneed.poolname,
-  platcollsweneed.indicator,
+  ofxfactorcprcmo.cmo,
+  ofxfactorcprcmo.cusip,
+  ofxfactorcprcmo.ofxfactor,
+  ofxfactorcprcmo.ofplatxfactor,
+  ofxfactor/currface AS weightofpool,
+  ofplatxfactor/currface AS weightofplat
+INTO TEMP TABLE weightofpoolorplatincmo
+-- so I should be able to make this it's own table limit by born date and be fine
+FROM
+    ofxfactorcprcmo
+-- should this be an inner join... they should have the same amount they are the same amount
+INNER JOIN cmocurrfacecpr 
+ON ofxfactorcprcmo.cmo = cmocurrfacecpr.cmo
+-- I assume this is ok current face is zero so we no longer care about it
+WHERE cmocurrfacecpr.currface > 0;
+
+-- LIMIT 2;
+
+-- SMM = 1 - Power( 1 - CPR / 100, 1/12 ) 
+
+-- Step 3 :   SMM of CMO for month m+1
+
+
+-- = sum weight of each pool i for month m  * SMM of pool i for month m+1
+
+
+
+SELECT
+  weightofpoolorplatincmo.cmo,
+  weightofpoolorplatincmo.cusip,
   currpoolscprwactual.cusip as poolcusip,
-  (
-    platcollsweneed.faceinplatinum * (
-      currpoolscprwactual."remainingBalance" / currpoolscprwactual.originalface
-    )
-  ) / platcurrfacecpr.currface AS weightofpool,
   currpoolscprwactual.actualcpr,
+  weightofpoolorplatincmo.weightofpool,
   (
     1 -(
       POWER(
@@ -176,13 +202,7 @@ SELECT
       )
     )
   ) AS poolsmm,
-  (
-    (
-      platcollsweneed.faceinplatinum * (
-        currpoolscprwactual."remainingBalance" / currpoolscprwactual.originalface
-      )
-    ) / platcurrfacecpr.currface
-  ) * (
+  weightofpool * (
     1 -(
       POWER(
         (1 -(currpoolscprwactual.actualcpr)),
@@ -191,9 +211,7 @@ SELECT
     )
   ) as weightxpoolssm,
   currplatswithcpr.cusip as platcusip,
-  (
-    platcollsweneed.faceinplatinum * (currplatswithcpr.remainingbalance / currplatswithcpr.originalface)
-  ) / platcurrfacecpr.currface AS weightofplat,
+  weightofpoolorplatincmo.weightofplat,
   currplatswithcpr.cpr AS platcpr,
   (
     1 -(
@@ -203,11 +221,7 @@ SELECT
       )
     )
   ) AS platsmm,
-  (
-    (
-      platcollsweneed.faceinplatinum * (currplatswithcpr.remainingbalance / currplatswithcpr.originalface)
-    ) / platcurrfacecpr.currface
-  ) * (
+  weightofplat * (
     1 -(
       POWER(
         (1 -(currplatswithcpr.cpr)),
@@ -215,41 +229,56 @@ SELECT
       )
     )
   ) as weightxplatssm
-INTO TEMP TABLE almoststepthree
+INTO TEMP TABLE almoststepthreecmos
 -- would need to use same table here  
 FROM
-  platcollsweneed
-INNER JOIN platcurrfacecpr
-  ON platcollsweneed.platcusip = platcurrfacecpr.platcusip
+  weightofpoolorplatincmo
 LEFT JOIN currpoolscprwactual
-  ON platcollsweneed.poolname = currpoolscprwactual.name
-  AND platcollsweneed.indicator = currpoolscprwactual.indicator
-LEFT JOIN currplatswithcpr ON platcollsweneed.poolname = currplatswithcpr.name
-WHERE
-(
-  currpoolscprwactual.cusip IS NOT NULL
-  OR currplatswithcpr.cusip IS NOT NULL
-)
--- if it is zero it probably should not be there 
-AND platcurrfacecpr.currface > 0
--- AND platcollsweneed.cusip = '36225A2E9'
+  ON weightofpoolorplatincmo.cusip = currpoolscprwactual.cusip
+LEFT JOIN currplatswithcpr 
+  ON weightofpoolorplatincmo.cusip = currplatswithcpr.cusip
+-- WHERE currplatswithcpr.cusip IS NOT NULL
+
+LIMIT 3;
+
+
 ORDER BY
 platcollsweneed.poolname;
 
 ----------
 
 SELECT
-  almoststepthree.platinumcusip,
+  almoststepthreecmos.cmo,
   -- not sure why we divide by 100
   SUM(
-    COALESCE(almoststepthree.weightxpoolssm, 0) + COALESCE(almoststepthree.weightxplatssm, 0)
+    COALESCE(almoststepthreecmos.weightxpoolssm, 0) + COALESCE(almoststepthreecmos.weightxplatssm, 0)
   ) / 100 AS smm
-INTO TEMP TABLE stepthree
-FROM almoststepthree
+INTO TEMP TABLE stepthreecmos
+FROM almoststepthreecmos
 GROUP BY
-  almoststepthree.platinumcusip;
+  almoststepthreecmos.cmo
+
+-- LIMIT 3;
 
 
-\COPY (SELECT platinumcusip, (1 - POWER((1 - smm), 12)) as cpr FROM stepthree) to 'C:\Users\micha\platcpr' csv header; 
+SELECT 
+  cmo, 
+  (1 - POWER((1 - smm), 12)) AS cpr 
+FROM stepthreecmos
+WHERE cmo = '2020-063-8'
+
+
+ORDER BY 
+cmo DESC
+LIMIT 10;
+
+WHERE cmo = '20-63-04';
+
+LIMIT 2; 
+
+
+
+
+\COPY (SELECT cmo, (1 - POWER((1 - smm), 12)) AS cpr FROM stepthreecmos ORDER BY cmo DESC) to 'C:\Users\micha\cmocpr' csv header; 
 
 

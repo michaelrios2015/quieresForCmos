@@ -738,3 +738,58 @@ FROM
       x.cusip
   ) AS y
 
+
+
+-- THIS IS All testing how to improve the while loop
+
+
+SELECT 
+  cusip, 
+  (1 - POWER((1 - smm), 12)) AS cpr 
+  INTO TEMP TABLE stepfour
+  FROM stepthree
+
+
+
+-- THIS will print to a column
+
+SELECT *,
+CASE
+  WHEN stepfour.cpr = platinumbodies.cpr THEN 'CPRS ARE EQUAL'
+  ELSE 'CPRS are NOT eqaul'
+END
+FROM stepfour
+INNER JOIN platinumbodies
+ON stepfour.platinumcusip = platinumbodies.cusip
+WHERE platinumbodies.date = '2021-06-01'
+LIMIT 1;
+
+
+
+
+--- this can erease all the cprs
+UPDATE platinumbodies
+SET cpr = NULL
+WHERE platinumbodies.date = '2021-05-01';
+
+
+--- This will update platinum bodies cprs which is quite nice but i will not know id anything has changed
+-- so I can just run it a bunch of times keep updating 
+
+UPDATE platinumbodies
+SET cpr = stepfour.cpr
+FROM stepfour
+WHERE stepfour.cusip = platinumbodies.cusip
+AND platinumbodies.date = '2021-07-01';
+
+
+
+---------- so I can use this to see if the tables are equal then run the above to update then rerun the query
+-- that should be less copying and pasting... i think 
+SELECT COUNT(*) 
+FROM stepfour
+INNER JOIN platinumbodies
+ON stepfour.cusip = platinumbodies.cusip
+WHERE stepfour.cpr = platinumbodies.cpr
+AND platinumbodies.date = '2021-07-01';
+
