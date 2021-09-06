@@ -1,5 +1,5 @@
 
--- USE platinums, pools and platcolls
+---- SO TBA ELIG needs to be redone 
 
 -- If all of the underlying active pools in a platinum are 
  
@@ -26,9 +26,7 @@
 
 -- SWITCH DATES and run till no more chnages 
 
--- actually works pretty well
-
-DROP TABLE platcurr, platistbaelig, platistbaeligoutput, indicatorsandtbaelig; 
+-- DROP TABLE platcurr, platistbaelig, platistbaeligoutput, indicatorsandtbaelig ; 
 
 -- this gets me the platinums for the month I wanto to check
 
@@ -42,16 +40,14 @@ INTO TEMP TABLE platcurr
 FROM platinums
 INNER JOIN platinumbodies
 ON platinumbodies.cusip = platinums.cusip
-WHERE platinumbodies.date = '2021-06-01';
+WHERE platinumbodies.date = '2021-07-01';
 
 -- this uses platcoll as a join table with pools and plats in the platinum
 
 
 SELECT 
     platcolls.cusip, 
-    -- platcolls.active,
-    -- platcolls.born,
-    -- platcolls.terminated,
+    platcolls.active,
     pools.name, 
     pools.indicator, 
     pools.istbaelig,
@@ -90,11 +86,70 @@ LEFT JOIN platcurr
 ON platcolls.poolname = platcurr.name
 ---can probably use born and terminated dates 
 -- WHERE platcolls.active =  'A';
-WHERE platcolls.born <= '2021-06-01'
-AND (platcolls.terminated > '2021-06-01' OR platcolls.terminated IS NULL);
-
--- LIMIT 10;
+WHERE platcolls.born <= '2021-07-01'
+AND (platcolls.terminated > '2021-07-01' OR platcolls.terminated IS NULL);
 -------------------
+
+-------------- using to check so they have the same count checking them againist each other is a bit more 
+-- annoying then it seems and when i try checking just the pool and adding just the plats I seem to be 20 short 
+-- but the new way is probably working I mean it's litterally the same number and all are active so it should
+-- be fine 
+
+SELECT 
+    platcolls.cusip, 
+    platcolls.active,
+    pools.name, 
+    pools.indicator, 
+    pools.istbaelig,
+    CASE
+        WHEN pools.indicator = 'X' THEN true
+        WHEN pools.indicator IS NULL THEN NULL
+            ELSE false
+        END AS poolindicatorisx,
+    CASE
+        WHEN pools.indicator = 'M' THEN true
+        WHEN pools.indicator IS NULL THEN NULL
+            ELSE false
+        END AS poolindicatorism,    
+    platcurr.cusip AS platcusip,
+    platcurr.indicator AS platindicator,
+    platcurr.istbaelig AS platistbaelig,
+    CASE
+        WHEN platcurr.indicator = 'X' THEN true
+        WHEN platcurr.indicator IS NULL THEN NULL
+            ELSE false
+        END AS platindicatorisx,
+    CASE
+        WHEN platcurr.indicator = 'M' THEN true
+        WHEN platcurr.indicator IS NULL THEN NULL
+            ELSE false
+        END AS platindicatorism
+INTO TEMP TABLE platistbaeligoldway 
+FROM platcolls
+-- so we only look at the plats for that month
+INNER JOIN platcurr AS currfilter
+ON platcolls.cusip = currfilter.cusip
+LEFT JOIN pools 
+ON platcolls.poolname = pools.name
+AND platcolls.indicator = pools.indicator
+LEFT JOIN platcurr
+ON platcolls.poolname = platcurr.name
+---can probably use born and terminated dates 
+WHERE platcolls.active =  'A';
+
+SELECT COUNT(*)
+FROM platistbaelig
+INNER JOIN platistbaeligoldway
+ON platistbaelig.cusip = platistbaeligoldway.cusip
+WHERE 
+    CASE platistbaelig.name IS NOT NULL
+platistbaelig.name = platistbaeligoldway.name
+AND platistbaelig.indicator = platistbaeligoldway.indicator
+ (platistbaelig.platcusip = platistbaeligoldway.platcusip) 
+
+AND (platistbaelig.platcusip IS NOT NULL AND  platistbaeligoldway.platcusip IS NOT NULL);
+
+LIMIT 2;
 
 -- slimmed down version now accomodates those with no pools
 
@@ -108,6 +163,7 @@ FROM platistbaelig
 GROUP BY platistbaelig.cusip;
 
 
+SELECT * from platistbaeligoutput limit 3;
 
 --- putting the logic into sql 
 
@@ -127,40 +183,30 @@ FROM platistbaeligoutput;
 
 -- WHERE cusip = '36241LUK0'
 
--- COUNTS the differnce between what i just calculated and what i had in platinum bodies 
--- SHOULD let me know when to stop, so first time I run with null values get zero after that works great  
-
-SELECT COUNT(*)
-FROM indicatorsandtbaelig
-INNER JOIN platinumbodies
-ON indicatorsandtbaelig.cusip = platinumbodies.cusip
-WHERE platinumbodies.date = '2021-06-01'
-AND (platinumbodies.indicator != indicatorsandtbaelig.indicator
-OR platinumbodies.istbaelig != indicatorsandtbaelig.istbaelig);
-
-
-
-----------updating platinumbodies
 
 UPDATE platinumbodies
 SET indicator = indicatorsandtbaelig.indicator,
     istbaelig = indicatorsandtbaelig.istbaelig
 FROM indicatorsandtbaelig
 WHERE indicatorsandtbaelig.cusip = platinumbodies.cusip
-AND platinumbodies.date = '2021-06-01';
+AND platinumbodies.date = '2021-07-01';
 
--- rerun till no longer updates
+-- run this use it to update platinum bodies 
 
 -- \COPY (SELECT * FROM platistbaeligoutput) to 'C:\Users\micha\patinums_istbaelig_round_one' csv header;
 
 
-
-
-
+SELECT COUNT(*)
+FROM indicatorsandtbaelig
+INNER JOIN platinumbodies
+ON indicatorsandtbaelig.cusip = platinumbodies.cusip
+WHERE platinumbodies.date = '2021-07-01'
+AND (platinumbodies.indicator != indicatorsandtbaelig.indicator
+OR platinumbodies.istbaelig != indicatorsandtbaelig.istbaelig)
 
 
 --- this can erease all the cprs
--- UPDATE platinumbodies
--- SET indicator = NULL
--- AND istbaelig = NULL
--- WHERE platinumbodies.date = '2021-07-01';
+UPDATE platinumbodies
+SET indicator = NULL
+AND istbaelig = NULL
+WHERE platinumbodies.date = '2021-07-01';
