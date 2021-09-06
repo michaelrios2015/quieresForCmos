@@ -26,7 +26,7 @@
 
 -- SWITCH DATES and run till no more chnages 
 
-DROP TABLE platcurr, platistbaelig, platistbaeligoutput 
+-- DROP TABLE platcurr, platistbaelig, platistbaeligoutput, indicatorsandtbaelig ; 
 
 SELECT 
     platinums.cusip, 
@@ -95,6 +95,50 @@ FROM platistbaelig
 GROUP BY platistbaelig.cusip;
 
 
+SELECT * from platistbaeligoutput limit 3;
+
+--- putting the logic into sql 
+
+SELECT 
+    *,
+    CASE 
+        WHEN bothistbaelig IS TRUE AND (bothindicatorisx IS NOT TRUE OR bothindicatorism IS NOT TRUE) THEN TRUE
+        WHEN bothistbaelig IS FALSE AND (bothindicatorisx IS NOT TRUE OR bothindicatorism IS NOT TRUE) THEN FALSE
+    END AS istbaelig,
+    CASE 
+        WHEN bothindicatorisx IS TRUE AND bothindicatorism IS NOT TRUE THEN 'X'
+        WHEN bothindicatorisx IS NOT TRUE AND bothindicatorism IS TRUE THEN 'M'
+        WHEN bothindicatorisx IS NOT TRUE OR bothindicatorism IS NOT TRUE THEN 'C'
+    END AS indicator
+INTO TEMP TABLE indicatorsandtbaelig    
+FROM platistbaeligoutput;
+
+-- WHERE cusip = '36241LUK0'
+
+
+UPDATE platinumbodies
+SET indicator = indicatorsandtbaelig.indicator,
+    istbaelig = indicatorsandtbaelig.istbaelig
+FROM indicatorsandtbaelig
+WHERE indicatorsandtbaelig.cusip = platinumbodies.cusip
+AND platinumbodies.date = '2021-07-01';
+
 -- run this use it to update platinum bodies 
 
-\COPY (SELECT * FROM platistbaeligoutput) to 'C:\Users\micha\patinums_istbaelig_round_one' csv header;
+-- \COPY (SELECT * FROM platistbaeligoutput) to 'C:\Users\micha\patinums_istbaelig_round_one' csv header;
+
+
+SELECT COUNT(*)
+FROM indicatorsandtbaelig
+INNER JOIN platinumbodies
+ON indicatorsandtbaelig.cusip = platinumbodies.cusip
+WHERE platinumbodies.date = '2021-07-01'
+AND (platinumbodies.indicator != indicatorsandtbaelig.indicator
+OR platinumbodies.istbaelig != indicatorsandtbaelig.istbaelig)
+
+
+--- this can erease all the cprs
+UPDATE platinumbodies
+SET indicator = NULL
+AND istbaelig = NULL
+WHERE platinumbodies.date = '2021-07-01';
