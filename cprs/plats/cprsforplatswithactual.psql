@@ -43,7 +43,7 @@ FROM
     pools
     INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
 WHERE
-    poolbodies.date = '2021-06-01';
+    poolbodies.date = '2021-07-01';
 
 
 -- what we need from plats
@@ -58,7 +58,7 @@ FROM
     platinums
     INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
 WHERE
-    platinumbodies.date = '2021-06-01';
+    platinumbodies.date = '2021-07-01';
 
 -- what we need from platcolls
 
@@ -72,7 +72,7 @@ INTO TEMP TABLE platcollsweneed
 FROM
     platcolls
 WHERE
-    platcolls.born <= '2021-06-01';
+    platcolls.born <= '2021-07-01';
 
 -- LIMIT 2;
 
@@ -137,7 +137,7 @@ FROM
 -- I guess it needs to be inner join becuase we need a cpr??
 -- this is where I had to deal with a null value I believe  
 INNER JOIN actualcprs ON currpoolscpr.cusip = actualcprs.cusip
-WHERE actualcprs.date = '2021-07-01';
+WHERE actualcprs.date = '2021-08-01';
 
 
 ---------------------------------------------------------------------
@@ -151,7 +151,7 @@ SELECT
   platinumbodies.cpr
 INTO TEMP TABLE platcpr
 FROM  platinumbodies
-WHERE date = '2021-07-01';
+WHERE date = '2021-08-01';
 
 -- so plat info for month m and cpr for m+1 
 
@@ -262,7 +262,7 @@ GROUP BY
   almoststepthree.platinumcusip;
 
 
--- \COPY (SELECT platinumcusip, (1 - POWER((1 - smm), 12)) as cpr FROM stepthree) to 'C:\Users\micha\platcpr' csv header; 
+-- \COPY (SELECT cusip, cpr from platinumbodies where date = '2021-08-01') to 'C:\Users\micha\platcpr' csv header; 
 
 -- THIS IS All testing how to improve the while loop
 
@@ -282,7 +282,7 @@ FROM stepfour
 INNER JOIN platinumbodies
 ON stepfour.platinumcusip = platinumbodies.cusip
 WHERE stepfour.cpr = platinumbodies.cpr
-AND platinumbodies.date = '2021-07-01';
+AND platinumbodies.date = '2021-08-01';
 
 
 --- This will update platinum bodies cprs now with m + 1
@@ -291,7 +291,7 @@ UPDATE platinumbodies
 SET cpr = stepfour.cpr
 FROM stepfour
 WHERE stepfour.platinumcusip = platinumbodies.cusip
-AND platinumbodies.date = '2021-07-01';
+AND platinumbodies.date = '2021-08-01';
 
 
 
