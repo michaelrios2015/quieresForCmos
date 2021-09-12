@@ -7,9 +7,9 @@
 
 -- The formula
 
--- SMM = 1 - Power( 1 - CPR / 100, 1/12 ) - so even a minor error in CPR can cause major
+-- SMM = 1 - Power( 1 - CDR / 100, 1/12 ) - so even a minor error in cdr can cause major
 
--- CPR = 1 - power( 1- SMM, 12 )
+-- CDR = 1 - power( 1- SMM, 12 )
 
 -- Step 1 :   Current face of each platinum for month m (We are actually given this as remainingBalance)
 
@@ -23,13 +23,13 @@
 
 -- = sum weight of each pool i for month m  * SMM of pool i for month m+1
 
--- Step 4 : CPR of the platinum for month m+1
+-- Step 4 : CDR of the platinum for month m+1
 
--- Use SMM to CPR formula
+-- Use SMM to CDR formula
 
 --- first time should be able to COPY and paste the whole thing run these
 
--- we only have one actual cpr from july so we are trying it with our june ginnie mae data
+-- we only have one actual cdr from july so we are trying it with our june ginnie mae data
 -- this first part is pretty much step 1 and two doing things to get the weight of eacg pool..
 
 -- what we need from pools
@@ -40,12 +40,12 @@ SELECT
     pools.indicator,
     pools.originalface,
     poolbodies."remainingBalance"
-INTO TEMP TABLE currpoolscpr 
+INTO TEMP TABLE currpoolscdr 
 FROM
     pools
     INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
 WHERE
-    poolbodies.date = '2021-06-01';
+    poolbodies.date = '2021-07-01';
 
 
 -- what we need from plats
@@ -55,12 +55,12 @@ SELECT
     platinums.name,
     platinums.originalface,
     platinumbodies.remainingbalance
-INTO TEMP TABLE currplatscpr 
+INTO TEMP TABLE currplatscdr 
 FROM
     platinums
     INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
 WHERE
-    platinumbodies.date = '2021-06-01';
+    platinumbodies.date = '2021-07-01';
 
 -- what we need from platcolls
 
@@ -74,7 +74,7 @@ INTO TEMP TABLE platcollsweneed
 FROM
     platcolls
 WHERE
-    platcolls.born <= '2021-06-01';
+    platcolls.born <= '2021-07-01';
 
 -- LIMIT 2;
 
@@ -86,28 +86,28 @@ SELECT
     platcollsweneed.poolname,
     platcollsweneed.indicator,
     platcollsweneed.faceinplatinum,
-    currpoolscpr.cusip as poolcusip,
-    currpoolscpr."remainingBalance" / currpoolscpr.originalface AS poolfactor,
+    currpoolscdr.cusip as poolcusip,
+    currpoolscdr."remainingBalance" / currpoolscdr.originalface AS poolfactor,
     platcollsweneed.faceinplatinum * (
-    currpoolscpr."remainingBalance" / currpoolscpr.originalface
+    currpoolscdr."remainingBalance" / currpoolscdr.originalface
     ) AS ofxfactor,
-    currplatscpr.cusip  as platinplatcusip,
-    currplatscpr.remainingbalance / currplatscpr.originalface AS platfactor,
+    currplatscdr.cusip  as platinplatcusip,
+    currplatscdr.remainingbalance / currplatscdr.originalface AS platfactor,
     platcollsweneed.faceinplatinum * (
-    currplatscpr.remainingbalance / currplatscpr.originalface
+    currplatscdr.remainingbalance / currplatscdr.originalface
     ) AS ofplatxfactor
-INTO TEMP TABLE ofxfactorcpr
+INTO TEMP TABLE ofxfactorcdr
 -- so I should be able to make this it's own table limit by born date and be fine
 FROM
     platcollsweneed
-LEFT JOIN currpoolscpr 
-ON platcollsweneed.poolname = currpoolscpr.name
-AND platcollsweneed.indicator = currpoolscpr.indicator
-LEFT JOIN currplatscpr ON platcollsweneed.poolname = currplatscpr.name
+LEFT JOIN currpoolscdr 
+ON platcollsweneed.poolname = currpoolscdr.name
+AND platcollsweneed.indicator = currpoolscdr.indicator
+LEFT JOIN currplatscdr ON platcollsweneed.poolname = currplatscdr.name
 WHERE
     (
-    currpoolscpr.cusip IS NOT NULL
-    OR currplatscpr.cusip IS NOT NULL
+    currpoolscdr.cusip IS NOT NULL
+    OR currplatscdr.cusip IS NOT NULL
     );
 
 
@@ -118,54 +118,54 @@ SELECT
   SUM(
     COALESCE(ofxfactor, 0) + COALESCE(ofplatxfactor, 0)
   ) / 100 AS currface
-INTO TEMP TABLE platcurrfacecpr
-FROM ofxfactorcpr
+INTO TEMP TABLE platcurrfacecdr
+FROM ofxfactorcdr
 -- WHERE platcusip = '36225A2E9'
 GROUP BY
   platcusip;
 
--- current pools with cpr , will need in next steps 
+-- current pools with cdr , will need in next steps 
 
  SELECT
-  currpoolscpr.cusip,
-  currpoolscpr.name,
-  currpoolscpr.indicator,
-  currpoolscpr.originalface,
-  currpoolscpr."remainingBalance",
-  actualcprs.actualcpr
-INTO TEMP TABLE currpoolscprwactual  
+  currpoolscdr.cusip,
+  currpoolscdr.name,
+  currpoolscdr.indicator,
+  currpoolscdr.originalface,
+  currpoolscdr."remainingBalance",
+  actualcdrs.cdr
+INTO TEMP TABLE currpoolscdrwactual  
 FROM
-  currpoolscpr
--- I guess it needs to be inner join becuase we need a cpr??
+  currpoolscdr
+-- I guess it needs to be inner join becuase we need a cdr??
 -- this is where I had to deal with a null value I believe  
-INNER JOIN actualcprs ON currpoolscpr.cusip = actualcprs.cusip
-WHERE actualcprs.date = '2021-07-01';
+INNER JOIN actualcdrs ON currpoolscdr.cusip = actualcdrs.cusip
+WHERE actualcdrs.date = '2021-08-01';
 
 
 ---------------------------------------------------------------------
 -- after first time uncomment from here and run 
-DROP TABLE platcpr, currplatswithcpr, almoststepthree, stepthree, stepfour;
+DROP TABLE platcdr, currplatswithcdr, almoststepthree, stepthree, stepfour;
 
--- so the cprs are for month + 1
+-- so the cdrs are for month + 1
 
 SELECT 
   platinumbodies.cusip,
-  platinumbodies.cpr
-INTO TEMP TABLE platcpr
+  platinumbodies.cdr
+INTO TEMP TABLE platcdr
 FROM  platinumbodies
-WHERE date = '2021-07-01';
+WHERE date = '2021-08-01';
 
--- so plat info for month m and cpr for m+1 
+-- so plat info for month m and cdr for m+1 
 
 SELECT
-  currplatscpr.cusip,
-  currplatscpr.name,
-  currplatscpr.originalface,
-  currplatscpr.remainingbalance,
-  platcpr.cpr
-INTO TEMP TABLE currplatswithcpr
-FROM currplatscpr
-INNER JOIN platcpr ON currplatscpr.cusip = platcpr.cusip;
+  currplatscdr.cusip,
+  currplatscdr.name,
+  currplatscdr.originalface,
+  currplatscdr.remainingbalance,
+  platcdr.cdr
+INTO TEMP TABLE currplatswithcdr
+FROM currplatscdr
+INNER JOIN platcdr ON currplatscdr.cusip = platcdr.cusip;
 
 
 -- step three without summing
@@ -174,17 +174,17 @@ SELECT
   platcollsweneed.platcusip AS platinumcusip,
   platcollsweneed.poolname,
   platcollsweneed.indicator,
-  currpoolscprwactual.cusip as poolcusip,
+  currpoolscdrwactual.cusip as poolcusip,
   (
     platcollsweneed.faceinplatinum * (
-      currpoolscprwactual."remainingBalance" / currpoolscprwactual.originalface
+      currpoolscdrwactual."remainingBalance" / currpoolscdrwactual.originalface
     )
-  ) / platcurrfacecpr.currface AS weightofpool,
-  currpoolscprwactual.actualcpr,
+  ) / platcurrfacecdr.currface AS weightofpool,
+  currpoolscdrwactual.cdr,
   (
     1 -(
       POWER(
-        (1 -(currpoolscprwactual.actualcpr)),
+        (1 -(currpoolscdrwactual.cdr)),
         (cast(1 as float) / cast(12 as float))
       )
     )
@@ -192,38 +192,38 @@ SELECT
   (
     (
       platcollsweneed.faceinplatinum * (
-        currpoolscprwactual."remainingBalance" / currpoolscprwactual.originalface
+        currpoolscdrwactual."remainingBalance" / currpoolscdrwactual.originalface
       )
-    ) / platcurrfacecpr.currface
+    ) / platcurrfacecdr.currface
   ) * (
     1 -(
       POWER(
-        (1 -(currpoolscprwactual.actualcpr)),
+        (1 -(currpoolscdrwactual.cdr)),
         (cast(1 as float) / cast(12 as float))
       )
     )
   ) as weightxpoolssm,
-  currplatswithcpr.cusip as platcusip,
+  currplatswithcdr.cusip as platcusip,
   (
-    platcollsweneed.faceinplatinum * (currplatswithcpr.remainingbalance / currplatswithcpr.originalface)
-  ) / platcurrfacecpr.currface AS weightofplat,
-  currplatswithcpr.cpr AS platcpr,
+    platcollsweneed.faceinplatinum * (currplatswithcdr.remainingbalance / currplatswithcdr.originalface)
+  ) / platcurrfacecdr.currface AS weightofplat,
+  currplatswithcdr.cdr AS platcdr,
   (
     1 -(
       POWER(
-        (1 -(currplatswithcpr.cpr)),
+        (1 -(currplatswithcdr.cdr)),
         (cast(1 as float) / cast(12 as float))
       )
     )
   ) AS platsmm,
   (
     (
-      platcollsweneed.faceinplatinum * (currplatswithcpr.remainingbalance / currplatswithcpr.originalface)
-    ) / platcurrfacecpr.currface
+      platcollsweneed.faceinplatinum * (currplatswithcdr.remainingbalance / currplatswithcdr.originalface)
+    ) / platcurrfacecdr.currface
   ) * (
     1 -(
       POWER(
-        (1 -(currplatswithcpr.cpr)),
+        (1 -(currplatswithcdr.cdr)),
         (cast(1 as float) / cast(12 as float))
       )
     )
@@ -232,19 +232,19 @@ INTO TEMP TABLE almoststepthree
 -- would need to use same table here  
 FROM
   platcollsweneed
-INNER JOIN platcurrfacecpr
-  ON platcollsweneed.platcusip = platcurrfacecpr.platcusip
-LEFT JOIN currpoolscprwactual
-  ON platcollsweneed.poolname = currpoolscprwactual.name
-  AND platcollsweneed.indicator = currpoolscprwactual.indicator
-LEFT JOIN currplatswithcpr ON platcollsweneed.poolname = currplatswithcpr.name
+INNER JOIN platcurrfacecdr
+  ON platcollsweneed.platcusip = platcurrfacecdr.platcusip
+LEFT JOIN currpoolscdrwactual
+  ON platcollsweneed.poolname = currpoolscdrwactual.name
+  AND platcollsweneed.indicator = currpoolscdrwactual.indicator
+LEFT JOIN currplatswithcdr ON platcollsweneed.poolname = currplatswithcdr.name
 WHERE
 (
-  currpoolscprwactual.cusip IS NOT NULL
-  OR currplatswithcpr.cusip IS NOT NULL
+  currpoolscdrwactual.cusip IS NOT NULL
+  OR currplatswithcdr.cusip IS NOT NULL
 )
 -- if it is zero it probably should not be there 
-AND platcurrfacecpr.currface > 0
+AND platcurrfacecdr.currface > 0
 -- AND platcollsweneed.cusip = '36225A2E9'
 ORDER BY
 platcollsweneed.poolname;
@@ -264,7 +264,7 @@ GROUP BY
   almoststepthree.platinumcusip;
 
 
--- \COPY (SELECT platinumcusip, (1 - POWER((1 - smm), 12)) as cpr FROM stepthree) to 'C:\Users\micha\platcpr' csv header; 
+-- \COPY (SELECT cusip, cdr from platinumbodies where date = '2021-08-01') to 'C:\Users\micha\platcdr' csv header; 
 
 -- THIS IS All testing how to improve the while loop
 
@@ -272,7 +272,7 @@ GROUP BY
 --  just a temp table 
 SELECT 
   platinumcusip, 
-  (1 - POWER((1 - smm), 12)) AS cpr 
+  (1 - POWER((1 - smm), 12)) AS cdr 
 INTO TEMP TABLE stepfour  
 FROM stepthree;
 
@@ -283,37 +283,45 @@ SELECT COUNT(*)
 FROM stepfour
 INNER JOIN platinumbodies
 ON stepfour.platinumcusip = platinumbodies.cusip
-WHERE stepfour.cpr = platinumbodies.cpr
-AND platinumbodies.date = '2021-07-01';
+WHERE stepfour.cdr = platinumbodies.cdr
+AND platinumbodies.date = '2021-08-01';
 
 
---- This will update platinum bodies cprs now with m + 1
+--- This will update platinum bodies cdrs now with m + 1
 
 UPDATE platinumbodies
-SET cpr = stepfour.cpr
+SET cdr = stepfour.cdr
 FROM stepfour
 WHERE stepfour.platinumcusip = platinumbodies.cusip
-AND platinumbodies.date = '2021-07-01';
+AND platinumbodies.date = '2021-08-01';
 
 
 
---- this can erease all the cprs
+--- this can erease all the cdrs
 -- UPDATE platinumbodies
--- SET cpr = NULL
+-- SET cdr = NULL
 -- WHERE platinumbodies.date = '2021-07-01';
 
 
 --------- some testing stuff
 select count(*)
 FROM platinumbodies
-WHERE cpr is NULL 
+WHERE cdr is NULL 
 AND date = '2021-07-01'
 
 select *
 FROM platinumbodies 
 INNER JOIN platinumbodies AS x
 ON platinumbodies.cusip = x.cusip
-WHERE platinumbodies.cpr = x.cpr 
+WHERE platinumbodies.cdr = x.cdr 
 AND platinumbodies.date = '2021-06-01'
 AND x.date = '2021-07-01'
 LIMIT 10;
+
+
+--------------
+
+--  Alter table 
+
+ALTER TABLE platinumbodies
+ADD cdr double precision;

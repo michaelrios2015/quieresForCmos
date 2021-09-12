@@ -63,16 +63,16 @@ WHERE
 -- what we need from platcolls
 
 SELECT
-    platcolls.cusip AS platcusip,
-    platcolls.poolname,
-    platcolls.indicator,
-    platcolls.faceinplatinum,
-    platcolls.born   
+  platcolls.cusip AS platcusip,
+  platcolls.poolname,
+  platcolls.indicator,
+  platcolls.faceinplatinum,
+  platcolls.born   
 INTO TEMP TABLE platcollsweneed 
 FROM
-    platcolls
+  platcolls
 WHERE
-    platcolls.born <= '2021-07-01';
+  platcolls.born <= '2021-07-01';
 
 -- LIMIT 2;
 
@@ -315,3 +315,20 @@ WHERE platinumbodies.cpr = x.cpr
 AND platinumbodies.date = '2021-06-01'
 AND x.date = '2021-07-01'
 LIMIT 10;
+
+
+SELECT
+  platcolls.cusip AS platcusip,
+  platcolls.poolname,
+  platcolls.indicator,
+  platcolls.faceinplatinum,
+  platcolls.active,
+  platcolls.born   
+INTO TEMP TABLE platcollsweneedtest 
+FROM
+  platcolls
+WHERE
+  platcolls.born <= '2021-07-01'
+AND (
+  platcolls.terminated > '2021-07-01' OR platcolls.terminated IS NULL );
+
