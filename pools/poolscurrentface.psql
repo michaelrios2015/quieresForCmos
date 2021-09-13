@@ -1,0 +1,139 @@
+-- TEMP TABLES 
+
+--- SO I SHOULD BE ABLE To update the dates add the temp tables and run my query, yes!!! 
+-- combining pool and poolbodies getting what I need from both
+
+SELECT   
+    pools.cusip,
+    pools.name,
+    pools.indicator,
+    pools.issuedate,
+    pools.originalface,
+    poolbodies."remainingBalance",
+    -- calculating the factor on our own
+    poolbodies."remainingBalance" / pools.originalface AS factor, 
+    poolbodies."interestRate",
+    poolbodies."GWAC",
+    poolbodies."WAM",
+    poolbodies."WALA",
+    poolbodies.date
+INTO TEMP TABLE poolscurr 
+FROM pools 
+INNER JOIN poolbodies
+ON pools.cusip = poolbodies.cusip 
+WHERE poolbodies.date = '2021-06-01';
+-- LIMIT 3;
+
+-- this is just the poolpredictions for the next month, I call it current because it's a prediction so one month ahead is current
+
+SELECT *
+INTO TEMP TABLE poolpredictionscurr
+FROM poolpredictions
+WHERE poolpredictions.date = '2021-07-01';
+
+-- ditto for poolfhavas
+
+SELECT *
+INTO TEMP TABLE poolfhavascurr
+FROM poolfhavas
+WHERE poolfhavas.date = '2021-07-01';
+
+
+-- SELECT * FROM pools INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip LIMIT 2; 
+
+-- the temp table that sums up original face in platinum them and groups them by poolname and indicator
+-- which we will use to join to our pool table, so this is fine but need a date thing does it matter if it is 
+--active or not.. going to assumme it does not
+
+-- I think this is measured in pennies
+
+SELECT 
+    count(*),
+    poolname,
+    indicator,
+    SUM(faceinplatinum) as ofinplat
+INTO TEMP TABLE ofinplatinum 
+FROM platcolls
+WHERE born <= '2021-06-01'
+-- LIMIT 4;
+GROUP BY
+    poolname,
+    indicator;
+
+-- adding original face in cmos 
+
+-- TEMP TABLE 
+-- not really sure how date is being used..... allmost all cmos has not been updated since june..
+
+SELECT
+    cusip,
+    date,
+    COUNT (*),
+    SUM(faceincmo) AS ofincmo
+INTO TEMP TABLE ofpoolincmo
+FROM
+    ofincmos
+GROUP BY
+    cusip,
+    date;
+
+
+----now to add feds and we are good, the fed uses current face so we can just keep it like that 
+-- Switched back to june...
+
+--temp table, fed holdings has only one per pool?? I guess so 
+
+SELECT * 
+INTO TEMP TABLE fedholdingscurr
+FROM fedholdings
+WHERE fedholdings.asofdate = '2021-06-30';
+
+
+  
+-- joining it to other stuff 
+--this just needs to be turned into a copy statement and I need to check on which data we want 
+-- Actual CDR should be added might hav it not sure 
+
+SELECT
+  poolscurr.cusip,
+  poolscurr.name,
+  poolscurr.issuedate,
+  poolscurr."remainingBalance" AS currface,
+  --   poolscurr.factor,
+  --   ofpoolincmo.ofincmo,
+  ofpoolincmo.ofincmo * poolscurr.factor AS cfincmo,
+  fedholdingscurr.currentfacevalue AS cfinfed,
+  --   ofinplatinum.ofinplat,
+  (ofinplatinum.ofinplat/100) * poolscurr.factor AS cfinplat,
+  poolscurr."interestRate" as coupon,
+  poolscurr."GWAC" AS gwac,
+  poolscurr."WALA" AS wala,
+  poolscurr."WAM" AS wam,
+  poolfhavascurr.va,
+  poolpredictionscurr.cpr AS cprprediction,
+  poolpredictionscurr."cprNext" AS cprpredictionnext,
+  poolscurr.date
+INTO TEMP TABLE pooldataforweb
+FROM
+  poolscurr
+  LEFT JOIN poolpredictionscurr ON (poolscurr.cusip = poolpredictionscurr.cusip)
+  LEFT JOIN poolfhavascurr ON (poolscurr.cusip = poolfhavascurr.cusip)
+  LEFT JOIN ofinplatinum 
+    ON poolscurr.name = ofinplatinum.poolname
+    AND poolscurr.indicator = ofinplatinum.indicator
+  LEFT JOIN ofpoolincmo ON poolscurr.cusip = ofpoolincmo.cusip 
+  LEFT JOIN fedholdingscurr ON poolscurr.cusip = fedholdingscurr.cusip  
+--   WHERE poolscurr.cusip = '36202DVX6'  
+-- WHERE fedholdingscurr.currentfacevalue IS NOT NULL
+LIMIT
+  10;
+
+
+
+-- \COPY (SELECT * FROM pooldataforweb) to 'C:\Users\micha\pooldataforweb' csv header;
+
+
+SELECT cusip,
+currentface - cfincmo - cfinfed - cfinplat
+FROM pools
+WHERE currentface - cfincmo - cfinfed - cfinplat < 0
