@@ -86,7 +86,7 @@ GROUP BY
 SELECT * 
 INTO TEMP TABLE fedholdingscurr
 FROM fedholdings
-WHERE fedholdings.asofdate = '2021-06-30';
+WHERE fedholdings.asofdate = '2021-07-21';
 
 
   
@@ -122,7 +122,7 @@ FROM
     ON poolscurr.name = ofinplatinum.poolname
     AND poolscurr.indicator = ofinplatinum.indicator
   LEFT JOIN ofpoolincmo ON poolscurr.cusip = ofpoolincmo.cusip 
-  LEFT JOIN fedholdingscurr ON poolscurr.cusip = fedholdingscurr.cusip  
+  LEFT JOIN fedholdingscurr ON poolscurr.cusip = fedholdingscurr.cusip;  
 --   WHERE poolscurr.cusip = '36202DVX6'  
 -- WHERE fedholdingscurr.currentfacevalue IS NOT NULL
 LIMIT
@@ -132,8 +132,18 @@ LIMIT
 
 -- \COPY (SELECT * FROM pooldataforweb) to 'C:\Users\micha\pooldataforweb' csv header;
 
+---------pools with negative current face 
 
 SELECT cusip,
-currentface - cfincmo - cfinfed - cfinplat
-FROM pools
-WHERE currentface - cfincmo - cfinfed - cfinplat < 0
+currface - cfincmo - cfinfed - cfinplat AS minus,
+currface,
+cfincmo,
+cfinfed,
+cfinplat
+FROM pooldataforweb
+WHERE currface - cfincmo - cfinfed - cfinplat < 0
+ORDER BY currface - cfincmo - cfinfed - cfinplat ASC
+LIMIT 2;
+
+-- \COPY (SELECT cusip, currface - cfincmo - cfinfed - cfinplat AS minus, currface, cfincmo, cfinfed, cfinplat FROM pooldataforweb WHERE currface - cfincmo - cfinfed - cfinplat < 0 ORDER BY currface - cfincmo - cfinfed - cfinplat ASC) to 'C:\Users\micha\poolswithnegativecf' csv header;
+

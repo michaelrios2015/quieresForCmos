@@ -74,6 +74,7 @@ INTO TEMP TABLE platcollsweneed
 FROM
     platcolls
 WHERE
+    -- does not matter is active or not just don't want future ones
     platcolls.born <= '2021-07-01';
 
 -- LIMIT 2;

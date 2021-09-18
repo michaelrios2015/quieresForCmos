@@ -1,0 +1,18 @@
+---- so just a simple way of making sure all the ofincmos are unique
+SELECT SUM(g-1)
+FROM (
+SELECT cmo, cusip, date, sum(faceincmo) AS ofincmo, count(*) as g
+FROM ofincmos
+GROUP BY cmo, cusip, date
+HAVING COUNT(*) > 1) AS x
+
+LIMIT 2;
+
+
+-- so this seems fine just got to put it in a real table and the date is probably going to be changed
+SELECT cmo, cusip, date, sum(faceincmo) AS ofincmo
+INTO TEMP TABLE uniqueofincmos
+FROM ofincmos
+GROUP BY cmo, cusip, date;
+
+
