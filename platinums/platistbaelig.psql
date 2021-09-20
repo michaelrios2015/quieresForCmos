@@ -42,7 +42,7 @@ INTO TEMP TABLE platcurr
 FROM platinums
 INNER JOIN platinumbodies
 ON platinumbodies.cusip = platinums.cusip
-WHERE platinumbodies.date = '2021-06-01';
+WHERE platinumbodies.date = '2021-08-01';
 
 -- this uses platcoll as a join table with pools and plats in the platinum
 
@@ -90,8 +90,8 @@ LEFT JOIN platcurr
 ON platcolls.poolname = platcurr.name
 ---can probably use born and terminated dates 
 -- WHERE platcolls.active =  'A';
-WHERE platcolls.born <= '2021-06-01'
-AND (platcolls.terminated > '2021-06-01' OR platcolls.terminated IS NULL);
+WHERE platcolls.born <= '2021-08-01'
+AND (platcolls.terminated > '2021-08-01' OR platcolls.terminated IS NULL);
 
 -- LIMIT 10;
 -------------------
@@ -134,7 +134,7 @@ SELECT COUNT(*)
 FROM indicatorsandtbaelig
 INNER JOIN platinumbodies
 ON indicatorsandtbaelig.cusip = platinumbodies.cusip
-WHERE platinumbodies.date = '2021-06-01'
+WHERE platinumbodies.date = '2021-08-01'
 AND (platinumbodies.indicator != indicatorsandtbaelig.indicator
 OR platinumbodies.istbaelig != indicatorsandtbaelig.istbaelig);
 
@@ -147,7 +147,7 @@ SET indicator = indicatorsandtbaelig.indicator,
     istbaelig = indicatorsandtbaelig.istbaelig
 FROM indicatorsandtbaelig
 WHERE indicatorsandtbaelig.cusip = platinumbodies.cusip
-AND platinumbodies.date = '2021-06-01';
+AND platinumbodies.date = '2021-08-01';
 
 -- rerun till no longer updates
 

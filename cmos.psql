@@ -1,4 +1,6 @@
 ---- so just a simple way of making sure all the ofincmos are unique
+-- so it seems like each month 20 -30 are split in two and 
+
 SELECT SUM(g-1)
 FROM (
 SELECT cmo, cusip, date, sum(faceincmo) AS ofincmo, count(*) as g
@@ -11,8 +13,159 @@ LIMIT 2;
 
 -- so this seems fine just got to put it in a real table and the date is probably going to be changed
 SELECT cmo, cusip, date, sum(faceincmo) AS ofincmo
-INTO TEMP TABLE uniqueofincmos
+INTO TEMP TABLE tempuniqueofincmos
 FROM ofincmos
 GROUP BY cmo, cusip, date;
+
+
+
+--puts my temp table into a real table 
+INSERT INTO uniqueofincmos (cmo, cusip, date, faceincmo)
+SELECT cmo, cusip, date, ofincmo
+FROM tempuniqueofincmos
+WHERE tempuniqueofincmos.date = '2021-08-01';
+
+
+---------- attempts at updating cmo dates 
+-- so this is working between goes start < end 
+
+SELECT *
+FROM uniqueofincmos
+WHERE cmo BETWEEN '2021-006' AND '2021-007';
+LIMIT 5; 
+
+
+-- seems to work just fine just need to do one for each month
+UPDATE uniqueofincmos
+SET date = '2021-01-01' 
+WHERE cmo BETWEEN '2021-001' AND '2021-020';
+
+
+UPDATE uniqueofincmos
+SET date = '2021-02-01' 
+WHERE cmo BETWEEN '2021-020' AND '2021-040';
+
+UPDATE uniqueofincmos
+SET date = '2021-03-01' 
+WHERE cmo BETWEEN '2021-040' AND '2021-058';
+
+UPDATE uniqueofincmos
+SET date = '2021-04-01' 
+WHERE cmo BETWEEN '2021-058' AND '2021-074';
+
+UPDATE uniqueofincmos
+SET date = '2021-05-01' 
+WHERE cmo BETWEEN '2021-074' AND '2021-094';
+
+UPDATE uniqueofincmos
+SET date = '2021-06-01' 
+WHERE cmo BETWEEN '2021-094' AND '2021-116';
+
+UPDATE uniqueofincmos
+SET date = '2021-07-01' 
+WHERE cmo BETWEEN '2021-116' AND '2021-131';
+
+SELECT * FROM uniqueofincmos WHERE date = '2021-05-01' ORDER BY cmo DESC LIMIT 5;
+
+SELECT * FROM uniqueofincmos WHERE date = '2021-01-01' ORDER BY cmo LIMIT 5;
+
+
+------------ PREVIOUS YEARS, NULL MIGHT BE FINE 
+
+UPDATE uniqueofincmos
+SET date = '1999-01-01' 
+WHERE cmo LIKE '1999%';
+
+UPDATE uniqueofincmos
+SET date = '2000-01-01' 
+WHERE cmo LIKE '2000%';
+
+UPDATE uniqueofincmos
+SET date = '2001-01-01' 
+WHERE cmo LIKE '2001%';
+
+UPDATE uniqueofincmos
+SET date = '2002-01-01' 
+WHERE cmo LIKE '2002%';
+
+UPDATE uniqueofincmos
+SET date = '2003-01-01' 
+WHERE cmo LIKE '2003%';
+
+UPDATE uniqueofincmos
+SET date = '2004-01-01' 
+WHERE cmo LIKE '2004%';
+
+UPDATE uniqueofincmos
+SET date = '2005-01-01' 
+WHERE cmo LIKE '2005%';
+
+UPDATE uniqueofincmos
+SET date = '2006-01-01' 
+WHERE cmo LIKE '2006%';
+
+UPDATE uniqueofincmos
+SET date = '2007-01-01' 
+WHERE cmo LIKE '2007%';
+
+UPDATE uniqueofincmos
+SET date = '2008-01-01' 
+WHERE cmo LIKE '2008%';
+
+UPDATE uniqueofincmos
+SET date = '2009-01-01' 
+WHERE cmo LIKE '2009%';
+
+UPDATE uniqueofincmos
+SET date = '2010--01-01' 
+WHERE cmo LIKE '2010%';
+
+UPDATE uniqueofincmos
+SET date = '2011-01-01' 
+WHERE cmo LIKE '2011%';
+
+UPDATE uniqueofincmos
+SET date = '2012-01-01' 
+WHERE cmo LIKE '2012%';
+
+UPDATE uniqueofincmos
+SET date = '2013-01-01' 
+WHERE cmo LIKE '2013%';
+
+UPDATE uniqueofincmos
+SET date = '2014-01-01' 
+WHERE cmo LIKE '2014%';
+
+UPDATE uniqueofincmos
+SET date = '2015-01-01' 
+WHERE cmo LIKE '2015%';
+
+UPDATE uniqueofincmos
+SET date = '2016-01-01' 
+WHERE cmo LIKE '2016%';
+
+UPDATE uniqueofincmos
+SET date = '2017-01-01' 
+WHERE cmo LIKE '2017%';
+
+UPDATE uniqueofincmos
+SET date = '2018-01-01' 
+WHERE cmo LIKE '2018%';
+
+UPDATE uniqueofincmos
+SET date = '2019-01-01' 
+WHERE cmo LIKE '2019%';
+
+UPDATE uniqueofincmos
+SET date = '2020-01-01' 
+WHERE cmo LIKE '2020%';
+
+
+
+DELETE FROM uniqueofincmos
+WHERE date = '2021-07-01';
+
+DELETE FROM ofincmos
+WHERE date = '2021-07-01' OR date = '2021-08-01';
 
 

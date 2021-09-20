@@ -64,19 +64,38 @@ GROUP BY
 
 -- TEMP TABLE 
 -- not really sure how date is being used..... allmost all cmos has not been updated since june..
+---NEEDS TO BE CHANGED
+
+--old way
+
+-- SELECT
+--     cusip,
+--     date,
+--     COUNT (*),
+--     SUM(faceincmo) AS ofincmo
+-- INTO TEMP TABLE ofpoolincmo
+-- FROM
+--     ofincmos
+-- GROUP BY
+--     cusip,
+--     date;
+
+
 
 SELECT
     cusip,
-    date,
-    COUNT (*),
+    -- date,
+    -- COUNT (*),
     SUM(faceincmo) AS ofincmo
 INTO TEMP TABLE ofpoolincmo
 FROM
-    ofincmos
+    uniqueofincmos
+WHERE date <= '2021-06-01'
 GROUP BY
-    cusip,
-    date;
-
+    cusip;
+--     date
+-- ORDER BY date DESC
+-- LIMIT 2;
 
 ----now to add feds and we are good, the fed uses current face so we can just keep it like that 
 -- Switched back to june...
@@ -125,8 +144,8 @@ FROM
   LEFT JOIN fedholdingscurr ON poolscurr.cusip = fedholdingscurr.cusip;  
 --   WHERE poolscurr.cusip = '36202DVX6'  
 -- WHERE fedholdingscurr.currentfacevalue IS NOT NULL
-LIMIT
-  10;
+-- LIMIT
+  -- 10;
 
 
 
@@ -143,7 +162,7 @@ cfinplat
 FROM pooldataforweb
 WHERE currface - cfincmo - cfinfed - cfinplat < 0
 ORDER BY currface - cfincmo - cfinfed - cfinplat ASC
-LIMIT 2;
+LIMIT 10;
 
 -- \COPY (SELECT cusip, currface - cfincmo - cfinfed - cfinplat AS minus, currface, cfincmo, cfinfed, cfinplat FROM pooldataforweb WHERE currface - cfincmo - cfinfed - cfinplat < 0 ORDER BY currface - cfincmo - cfinfed - cfinplat ASC) to 'C:\Users\micha\poolswithnegativecf' csv header;
 
