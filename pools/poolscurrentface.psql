@@ -91,6 +91,7 @@ INTO TEMP TABLE ofpoolincmo
 FROM
     uniqueofincmos
 WHERE date <= '2021-06-01'
+AND ( collapsed > '2021-06-01' OR collapsed IS NULL) 
 GROUP BY
     cusip;
 --     date
@@ -160,9 +161,44 @@ cfincmo,
 cfinfed,
 cfinplat
 FROM pooldataforweb
-WHERE currface - cfincmo - cfinfed - cfinplat < 0
+-- WHERE currface - cfincmo - cfinfed - cfinplat < 0
+WHERE cusip = '36176ADT3'
 ORDER BY currface - cfincmo - cfinfed - cfinplat ASC
 LIMIT 10;
 
--- \COPY (SELECT cusip, currface - cfincmo - cfinfed - cfinplat AS minus, currface, cfincmo, cfinfed, cfinplat FROM pooldataforweb WHERE currface - cfincmo - cfinfed - cfinplat < 0 ORDER BY currface - cfincmo - cfinfed - cfinplat ASC) to 'C:\Users\micha\poolswithnegativecf' csv header;
+-- \COPY (SELECT cusip, currface - cfincmo - cfinfed - cfinplat AS minus, currface, cfincmo, cfinfed, cfinplat FROM pooldataforweb WHERE currface - cfincmo - cfinfed - cfinplat < 0 ORDER BY currface - cfincmo - cfinfed - cfinplat DESC) to 'C:\Users\micha\poolswithnegativecf' csv header;
 
+---------pools with current face above zero 
+
+SELECT cusip,
+currface - cfincmo - cfinfed - cfinplat AS float,
+currface,
+cfincmo,
+cfinfed,
+cfinplat
+FROM pooldataforweb
+WHERE currface - cfincmo - cfinfed - cfinplat > 0
+ORDER BY currface - cfincmo - cfinfed - cfinplat DESC
+LIMIT 10;
+
+SELECT COUNT (*)
+FROM pooldataforweb
+WHERE currface - cfincmo - cfinfed - cfinplat > 0
+
+SELECT COUNT(*)
+FROM pooldataforweb
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1000
+LIMIT 10;
+
+SELECT *,
+  currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float
+FROM pooldataforweb
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1
+ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC
+LIMIT 100;
+
+\COPY (SELECT *, currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float FROM pooldataforweb WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC) to 'C:\Users\micha\poolswithnegativecf' csv header;
+
+SELECT COUNT (*)
+FROM pooldataforweb
+WHERE currface IS NULL

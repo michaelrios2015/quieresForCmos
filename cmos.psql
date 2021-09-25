@@ -169,3 +169,41 @@ DELETE FROM ofincmos
 WHERE date = '2021-07-01' OR date = '2021-08-01';
 
 
+------------- adding collapsed table 
+
+-- worked should change table in app
+
+ALTER TABLE uniqueofincmos
+ADD collapsed date;
+
+2012-129-1
+ 
+2012-129-4
+ 
+2013-165-13
+ 
+2013-049-4
+ 
+2013-049-1
+
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2012-129-1';
+
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2012-129-4';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2013-165-13';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2013-049-4';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2013-049-1';

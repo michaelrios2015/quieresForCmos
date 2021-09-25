@@ -1,0 +1,60 @@
+------ so just trying to convert currect face to original
+
+--- just getting the factor
+
+SELECT  
+    pools.cusip, 
+    pools."originalface", 
+    poolbodies."remainingBalance", 
+    poolbodies.factor, 
+    poolbodies."remainingBalance"/pools."originalface" as factortwo,
+    date
+INTO TEMP TABLE poolsfactor
+FROM pools 
+INNER JOIN poolbodies
+ON pools.cusip = poolbodies.cusip
+WHERE date = '2021-05-01';
+
+SELECT  
+    pools.cusip, 
+    pools."originalface", 
+    poolbodies."remainingBalance", 
+    poolbodies.factor, 
+    poolbodies."remainingBalance"/pools."originalface" as factortwo,
+    date
+INTO TEMP TABLE poolsfactorjune
+FROM pools 
+INNER JOIN poolbodies
+ON pools.cusip = poolbodies.cusip
+WHERE date = '2021-06-01';
+
+
+LIMIT 5;
+
+-- so pretty sure fed as of date first two are two months back and last two are one month back 
+
+SELECT 
+    asofdate, 
+    fedholdings.cusip,
+    currentfacevalue,
+    factortwo,
+    currentfacevalue / factortwo as of,
+    date
+FROM fedholdings
+INNER JOIN poolsfactor
+ON fedholdings.cusip = poolsfactor.cusip
+WHERE asofdate = '2021-07-14'
+LIMIT 5;
+
+SELECT 
+    asofdate, 
+    fedholdings.cusip,
+    currentfacevalue,
+    factortwo,
+    currentfacevalue / factortwo as of,
+    date
+FROM fedholdings
+INNER JOIN poolsfactorjune
+ON fedholdings.cusip = poolsfactorjune.cusip
+WHERE asofdate = '2021-07-21'
+LIMIT 5;
