@@ -2,11 +2,16 @@
 
 --- SO I SHOULD BE ABLE To update the dates add the temp tables and run my query, yes!!! 
 -- combining pool and poolbodies getting what I need from both
+-- this is month M
+-- So we want two reports one for pools with Type = "SF' and Indicator = 'M" G2
+-- and one with Type = "SF' and Indicator = 'X" G1
+
 
 SELECT   
     pools.cusip,
     pools.name,
     pools.indicator,
+    pools.type,
     pools.issuedate,
     pools.originalface,
     poolbodies."remainingBalance",
@@ -21,22 +26,26 @@ INTO TEMP TABLE poolscurr
 FROM pools 
 INNER JOIN poolbodies
 ON pools.cusip = poolbodies.cusip 
-WHERE poolbodies.date = '2021-06-01';
+WHERE poolbodies.date = '2021-08-01'
+-- AND pools.indicator = 'M'
+AND pools.indicator = 'X'
+AND pools.type = 'SF';
 -- LIMIT 3;
 
 -- this is just the poolpredictions for the next month, I call it current because it's a prediction so one month ahead is current
+-- these are month M + 1
 
 SELECT *
 INTO TEMP TABLE poolpredictionscurr
 FROM poolpredictions
-WHERE poolpredictions.date = '2021-07-01';
+WHERE poolpredictions.date = '2021-09-01';
 
 -- ditto for poolfhavas
 
 SELECT *
 INTO TEMP TABLE poolfhavascurr
 FROM poolfhavas
-WHERE poolfhavas.date = '2021-07-01';
+WHERE poolfhavas.date = '2021-09-01';
 
 
 -- SELECT * FROM pools INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip LIMIT 2; 
@@ -54,7 +63,7 @@ SELECT
     SUM(faceinplatinum) as ofinplat
 INTO TEMP TABLE ofinplatinum 
 FROM platcolls
-WHERE born <= '2021-06-01'
+WHERE born <= '2021-08-01'
 -- LIMIT 4;
 GROUP BY
     poolname,
@@ -90,8 +99,8 @@ SELECT
 INTO TEMP TABLE ofpoolincmo
 FROM
     uniqueofincmos
-WHERE date <= '2021-06-01'
-AND ( collapsed > '2021-06-01' OR collapsed IS NULL) 
+WHERE date <= '2021-08-01'
+AND ( collapsed > '2021-08-01' OR collapsed IS NULL) 
 GROUP BY
     cusip;
 --     date
@@ -102,11 +111,12 @@ GROUP BY
 -- Switched back to june...
 
 --temp table, fed holdings has only one per pool?? I guess so 
+-- SO Month M + 1.5
 
 SELECT * 
 INTO TEMP TABLE fedholdingscurr
 FROM fedholdings
-WHERE fedholdings.asofdate = '2021-07-21';
+WHERE fedholdings.asofdate = '2021-09-22';
 
 
   
@@ -117,6 +127,8 @@ WHERE fedholdings.asofdate = '2021-07-21';
 SELECT
   poolscurr.cusip,
   poolscurr.name,
+  poolscurr.indicator,
+  poolscurr.type,
   poolscurr.issuedate,
   poolscurr."remainingBalance" AS currface,
   --   poolscurr.factor,
@@ -149,6 +161,7 @@ FROM
   -- 10;
 
 
+-- this gets all the pools, eventually will want to limit it to pools with float 
 
 -- \COPY (SELECT * FROM pooldataforweb) to 'C:\Users\micha\pooldataforweb' csv header;
 
@@ -161,8 +174,8 @@ cfincmo,
 cfinfed,
 cfinplat
 FROM pooldataforweb
--- WHERE currface - cfincmo - cfinfed - cfinplat < 0
-WHERE cusip = '36176ADT3'
+WHERE currface - cfincmo - cfinfed - cfinplat < 0
+-- WHERE cusip = '36176ADT3'
 ORDER BY currface - cfincmo - cfinfed - cfinplat ASC
 LIMIT 10;
 
@@ -181,13 +194,16 @@ WHERE currface - cfincmo - cfinfed - cfinplat > 0
 ORDER BY currface - cfincmo - cfinfed - cfinplat DESC
 LIMIT 10;
 
+
+-- just counting the ones that still have float 
 SELECT COUNT (*)
 FROM pooldataforweb
-WHERE currface - cfincmo - cfinfed - cfinplat > 0
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1;
 
+-- counting the ones that have negative float this should not happen 
 SELECT COUNT(*)
 FROM pooldataforweb
-WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1000
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -100
 LIMIT 10;
 
 SELECT *,
@@ -197,7 +213,13 @@ WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat
 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC
 LIMIT 100;
 
-\COPY (SELECT *, currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float FROM pooldataforweb WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC) to 'C:\Users\micha\poolswithnegativecf' csv header;
+-- for G2
+-- \COPY (SELECT *, currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float FROM pooldataforweb WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC) to 'C:\Users\micha\G2poolswithnegativecf' csv header;
+
+
+-- for G1
+\COPY (SELECT *, currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float FROM pooldataforweb WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC) to 'C:\Users\micha\G1poolswithnegativecf' csv header;
+
 
 SELECT COUNT (*)
 FROM pooldataforweb
