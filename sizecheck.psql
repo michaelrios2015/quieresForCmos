@@ -88,7 +88,7 @@ ORDER BY poolstestforcurrfaceindicx."interestRate";
 -- current face of pool - current face in platinums + current face in platinums
 
 -- Aside from the cases where TBA eligible pools are dumped into a non TBA eligible platinum the sizes we get here should be the same as case 1.
-
+----OOOHHHH maybe I am doing this all wrong 
 
 -- so I have something that should get the pool curent face - the current face of pool in the plat 
 
@@ -120,6 +120,21 @@ AND pools.type = 'SF'
 AND pools.istbaelig = 'true';
 
 
+-------------- going to need platinums
+
+SELECT 
+    platinums.cusip,
+    platinums.name,
+    platinumbodies.istbaelig,
+    platinumbodies.date
+INTO TEMP TABLE currplats
+FROM platinums
+INNER JOIN platinumbodies
+ON platinums.cusip = platinumbodies.cusip
+WHERE platinumbodies.date = '2021-08-01';
+
+-- LIMIT 2;
+
 -- to get the platinum one i need this but need to subtract the part already in platinums 
 
 -- current face of pool - current face in platinums + current face in platinums so this is going fine for pools in plats but I will also need to check on pools not in plats
@@ -129,9 +144,15 @@ AND pools.istbaelig = 'true';
 -- so a pool can be in more than one platinums so we need to go through them all find the currface in plat the sum them up by pool cusip, then I can subtract from pool currface ...
 
 
---so this gets currentface of a pool in the plats, should probably add a born date ...  
+--so this gets currentface of a pool in the plats, should probably add a born date ...
+-- now it aslo has more of the platinum info 
+-- so this should be working fine.. i get the current face of a pool in a plat i can see if
+-- it is tba elig or not if it's not can just not sum it   
 
 SELECT 
+    platcolls.cusip AS platcusip,
+    currplats.istbaelig,
+    currplats.name,
     poolsforcurrfaceplat.cusip AS poolcusip, 
     (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, 
     poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
@@ -139,7 +160,130 @@ INTO TEMP TABLE poolcurrfaceinplatt
 FROM platcolls
 INNER JOIN poolsforcurrfaceplat
 ON poolsforcurrfaceplat.name = platcolls.poolname
-AND poolsforcurrfaceplat.indicator = platcolls.indicator;
+AND poolsforcurrfaceplat.indicator = platcolls.indicator
+INNER JOIN currplats
+ON currplats.cusip = platcolls.cusip;
+
+
+-- now trying to start a second round so seems to join ok... but what to do now...
+-- keep on trying to go until i get to the very end.. and once i get to the end how do 
+-- i get back to the begining??
+
+-- so these are 98 platinums that need to be checked to see if they have current face
+-- in another platinum.. so do they need to go into another temp table?? 
+-- probably the easiest thing to do at the moment 
+
+-- can I just add them to the table?? maybe 
+
+-- so this is essentialy as a second round where I am looking into the platinums that are tba
+-- eligible (if they platinum was not tba eligible we are not adding teh current face so no point in
+-- looking further) and have current face in other platinums to see if we need to subtract  
+
+SELECT
+    -- DISTINCT platcolls.cusip
+    platcolls.cusip,
+    currplats.name,
+    -- currplats.istbaelig,
+    -- poolcurrfaceinplatt.platcusip,
+    -- poolcurrfaceinplatt.name,
+    poolcurrfaceinplatt.istbaelig
+    -- currplats.istbaelig
+    -- currplats.name
+    -- poolsforcurrfaceplat.cusip AS poolcusip, 
+    -- (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, 
+    -- poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
+INTO TEMP TABLE poolcurrfaceinplatttwo
+FROM platcolls
+INNER JOIN poolcurrfaceinplatt
+ON poolcurrfaceinplatt.name = platcolls.poolname
+INNER JOIN currplats
+ON currplats.cusip = platcolls.cusip
+WHERE poolcurrfaceinplatt.istbaelig IS TRUE
+AND currplats.istbaelig IS TRUE
+
+
+SELECT
+    -- COUNT (DISTINCT platcolls.cusip)
+    platcolls.cusip,
+    currplats.name,
+    -- currplats.istbaelig,
+    -- poolcurrfaceinplatt.platcusip,
+    -- poolcurrfaceinplatt.name,
+    -- poolcurrfaceinplatt.istbaelig,
+    currplats.istbaelig
+    -- currplats.name
+    -- poolsforcurrfaceplat.cusip AS poolcusip, 
+    -- (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, 
+    -- poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
+INTO TEMP TABLE poolcurrfaceinplattthree
+FROM platcolls
+INNER JOIN poolcurrfaceinplatttwo
+ON poolcurrfaceinplatttwo.name = platcolls.poolname
+INNER JOIN currplats
+ON currplats.cusip = platcolls.cusip
+WHERE poolcurrfaceinplatttwo.istbaelig IS TRUE
+AND currplats.istbaelig IS TRUE;
+
+
+SELECT
+    COUNT (DISTINCT platcolls.cusip)
+    -- platcolls.cusip,
+    -- currplats.name,
+    -- currplats.istbaelig,
+    -- poolcurrfaceinplatt.platcusip,
+    -- poolcurrfaceinplatt.name,
+    -- poolcurrfaceinplatt.istbaelig,
+    -- currplats.istbaelig
+    -- currplats.name
+    -- poolsforcurrfaceplat.cusip AS poolcusip, 
+    -- (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, 
+    -- poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
+-- INTO TEMP TABLE poolcurrfaceinplatttwo
+FROM platcolls
+INNER JOIN poolcurrfaceinplattthree
+ON poolcurrfaceinplattthree.name = platcolls.poolname
+INNER JOIN currplats
+ON currplats.cusip = platcolls.cusip
+WHERE poolcurrfaceinplattthree.istbaelig IS TRUE
+AND currplats.istbaelig IS TRUE
+
+
+
+LIMIT 10;
+
+-- just checking to see which platinums we have and seeing if they are is TBA eligible
+-- so this works just fine but I don't really need this could just inner join on pervious 
+-- table and if something is not tba eligible we don't count it.. but what about checking 
+-- checking platinums for platinums
+
+SELECT 
+    DISTINCT platcusip,
+    istbaelig
+INTO TEMP TABLE platstbaelig
+FROM poolcurrfaceinplatt
+inner join platinumbodies
+ON poolcurrfaceinplatt.platcusip = platinumbodies.cusip
+where platinumbodies.date = '2021-08-01';
+
+-- so I am getting twelve that should not be counted 
+
+ platcusip | istbaelig
+-----------+-----------
+ 3622A3CL2 | f
+ 36241LCQ7 | f
+ 36241LCC8 | f
+ 36225AYS3 | f
+ 3622A23J9 | f
+ 36241LH33 | f
+ 3622A2AV4 | f
+ 3622AAYQ1 | f
+ 3622AAGG3 | f
+ 3622A2RQ7 | f
+ 36241LJZ0 | f
+ 3622AAZD9 | f
+
+
+LIMIT 10;
 
 -- WHERE poolsforcurrfaceplat.cusip = '36202CTQ6';
 
@@ -440,3 +584,50 @@ SELECT COUNT (*)
 FROM fedholdings
 INNER JOIN platinums
 ON platinums.cusip = fedholdings.cusip
+
+
+----------------- AUGYST Pools current face summed by coupon
+
+
+ interestRate |        sum
+--------------+--------------------
+            1 |         1074750.93
+          1.5 |      4930417401.09
+            2 |    335990945550.57
+          2.5 |  357631597895.8399
+            3 |  314883151650.5401
+          3.5 | 256736112762.39996
+            4 | 116902060849.51997
+          4.5 |  48336702802.24001
+         4.75 |        11319669.24
+            5 | 18281904620.450012
+          5.1 |          226205.49
+         5.25 |          100040.41
+         5.45 | 339856.76999999996
+          5.5 |  5457388170.369996
+          5.6 |           36319.86
+         5.75 |          125371.99
+            6 | 3114617566.0199986
+          6.1 |            4478.38
+        6.375 |           22060.95
+         6.49 |            1718.56
+          6.5 | 1262683517.8999994
+         6.65 |          156448.53
+         6.69 |            8575.36
+         6.75 | 55792.740000000005
+         6.88 |  89739.45000000001
+            7 | 227066661.71999994
+         7.25 |          109352.72
+        7.265 |             950.42
+         7.45 |           73157.33
+          7.5 |  67955386.14999999
+         7.75 |             7911.9
+          7.8 |           68571.15
+         7.85 |            9079.53
+        7.875 |            27312.8
+          7.9 |           19252.66
+            8 | 30898579.909999996
+         8.25 |           40231.21
+          8.5 | 4544726.9399999995
+            9 |  706706.5199999999
+          9.5 |           92552.21
