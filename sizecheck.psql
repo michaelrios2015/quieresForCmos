@@ -26,6 +26,7 @@ AND pools.type = 'SF'
 AND pools.istbaelig = 'true';
 
 
+
 -- not so many SELECT 2454
 
 
@@ -119,6 +120,15 @@ AND pools.indicator = 'M'
 AND pools.type = 'SF'
 AND pools.istbaelig = 'true';
 
+--  so this is preety simple we just sum current face and group by interest rate 
+SELECT 
+    poolsforcurrfaceplat."interestRate", 
+    SUM(poolsforcurrfaceplat."remainingBalance")
+INTO TEMP TABLE checkone
+FROM poolsforcurrfaceplat
+GROUP BY poolsforcurrfaceplat."interestRate"
+ORDER BY poolsforcurrfaceplat."interestRate";
+
 
 -------------- going to need platinums
 
@@ -165,6 +175,52 @@ INNER JOIN currplats
 ON currplats.cusip = platcolls.cusip;
 
 
+SELECT 
+    *
+FROM 
+    poolcurrfaceinplatt
+LIMIT 2;
+
+-------------------------------------------- 
+-- testing to make sure I did this right
+
+SELECT 
+    platcolls.cusip AS platcusip,
+    currplats.istbaelig,
+    currplats.name,
+    poolsforcurrfaceplat.cusip AS poolcusip, 
+    (platcolls.faceinplatinum/100) AS ofinplat, 
+    poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
+INTO TEMP TABLE poolcurrfaceinplatttest
+FROM platcolls
+INNER JOIN poolsforcurrfaceplat
+ON poolsforcurrfaceplat.name = platcolls.poolname
+AND poolsforcurrfaceplat.indicator = platcolls.indicator
+INNER JOIN currplats
+ON currplats.cusip = platcolls.cusip
+
+WHERE platcolls.cusip = '3622A2AV4';
+LIMIT 3;
+
+
+SELECT 
+    COUNT (DISTINCT platcusip)
+FROM 
+    poolcurrfaceinplatttest
+WHERE 
+    istbaelig IS TRUE
+
+
+SELECT 
+    DISTINCT platcusip,
+    name
+INTO TEMP TABLE plattstocheck    
+FROM 
+    poolcurrfaceinplatttest
+WHERE 
+    istbaelig IS TRUE
+
+
 -- now trying to start a second round so seems to join ok... but what to do now...
 -- keep on trying to go until i get to the very end.. and once i get to the end how do 
 -- i get back to the begining??
@@ -183,10 +239,12 @@ SELECT
     -- DISTINCT platcolls.cusip
     platcolls.cusip,
     currplats.name,
-    -- currplats.istbaelig,
+    currplats.istbaelig,
+    platcolls.faceinplatinum/100 AS ofinplatinum,
     -- poolcurrfaceinplatt.platcusip,
     -- poolcurrfaceinplatt.name,
-    poolcurrfaceinplatt.istbaelig
+    plattstocheck.platcusip
+    -- poolcurrfaceinplatt.istbaelig AS plattbaelig
     -- currplats.istbaelig
     -- currplats.name
     -- poolsforcurrfaceplat.cusip AS poolcusip, 
@@ -194,23 +252,47 @@ SELECT
     -- poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
 INTO TEMP TABLE poolcurrfaceinplatttwo
 FROM platcolls
-INNER JOIN poolcurrfaceinplatt
-ON poolcurrfaceinplatt.name = platcolls.poolname
+INNER JOIN plattstocheck
+ON plattstocheck.name = platcolls.poolname
 INNER JOIN currplats
 ON currplats.cusip = platcolls.cusip
-WHERE poolcurrfaceinplatt.istbaelig IS TRUE
-AND currplats.istbaelig IS TRUE
+-- WHERE poolcurrfaceinplatt.istbaelig IS TRUE
+-- AND currplats.istbaelig IS TRUE
 
+--------------------------------- two plats are not is tba eligible
+
+SELECT 
+    COUNT (DISTINCT cusip)
+FROM 
+    poolcurrfaceinplatttwo
+WHERE istbaelig IS TRUE;
+
+SELECT 
+    *
+FROM 
+    poolcurrfaceinplatttwo
+WHERE istbaelig IS NOT TRUE;
+
+ 3622A2AV4 | 783620 | f         |     76,940,452 | 36241L3U8
+
+  platcusip | istbaelig |  name  | poolcusip | ofinplat  |      factortwo
+-----------+-----------+--------+-----------+-----------+---------------------
+ 36241L3U8 | t         | 783511 | 36202FY67 | 144,837,078 | 0.09760056819286533
+ 36241L3U8 | t         | 783511 | 36202FZY5 | 156,122,278 | 0.09299151407532467
+
+-------------------------------------- after this all the plats seem to be tba elig
 
 SELECT
-    -- COUNT (DISTINCT platcolls.cusip)
+    -- DISTINCT platcolls.cusip
     platcolls.cusip,
     currplats.name,
-    -- currplats.istbaelig,
+    currplats.istbaelig,
+    platcolls.faceinplatinum/100 AS ofinplatinum,
     -- poolcurrfaceinplatt.platcusip,
     -- poolcurrfaceinplatt.name,
-    -- poolcurrfaceinplatt.istbaelig,
-    currplats.istbaelig
+    poolcurrfaceinplatttwo.platcusip,
+    poolcurrfaceinplatttwo.istbaelig AS plattbaelig
+    -- currplats.istbaelig
     -- currplats.name
     -- poolsforcurrfaceplat.cusip AS poolcusip, 
     -- (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, 
@@ -222,30 +304,136 @@ ON poolcurrfaceinplatttwo.name = platcolls.poolname
 INNER JOIN currplats
 ON currplats.cusip = platcolls.cusip
 WHERE poolcurrfaceinplatttwo.istbaelig IS TRUE
-AND currplats.istbaelig IS TRUE;
+-- AND currplats.istbaelig IS TRUE
+
+SELECT 
+    COUNT (DISTINCT cusip)
+FROM 
+    poolcurrfaceinplattthree
+WHERE istbaelig IS TRUE;
 
 
 SELECT
-    COUNT (DISTINCT platcolls.cusip)
-    -- platcolls.cusip,
-    -- currplats.name,
-    -- currplats.istbaelig,
+    -- DISTINCT platcolls.cusip
+    platcolls.cusip,
+    currplats.name,
+    currplats.istbaelig,
+    platcolls.faceinplatinum/100 AS ofinplatinum,
     -- poolcurrfaceinplatt.platcusip,
     -- poolcurrfaceinplatt.name,
-    -- poolcurrfaceinplatt.istbaelig,
+    poolcurrfaceinplattthree.platcusip,
+    poolcurrfaceinplattthree.istbaelig AS plattbaelig
     -- currplats.istbaelig
     -- currplats.name
     -- poolsforcurrfaceplat.cusip AS poolcusip, 
     -- (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, 
     -- poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
--- INTO TEMP TABLE poolcurrfaceinplatttwo
+INTO TEMP TABLE poolcurrfaceinplattfour
 FROM platcolls
 INNER JOIN poolcurrfaceinplattthree
 ON poolcurrfaceinplattthree.name = platcolls.poolname
 INNER JOIN currplats
 ON currplats.cusip = platcolls.cusip
 WHERE poolcurrfaceinplattthree.istbaelig IS TRUE
-AND currplats.istbaelig IS TRUE
+-- AND currplats.istbaelig IS TRUE
+
+SELECT 
+    COUNT (DISTINCT cusip)
+FROM 
+    poolcurrfaceinplattfour
+WHERE istbaelig IS TRUE;
+
+
+SELECT
+    -- DISTINCT platcolls.cusip
+    platcolls.cusip,
+    currplats.name,
+    currplats.istbaelig,
+    platcolls.faceinplatinum/100 AS ofinplatinum,
+    -- poolcurrfaceinplatt.platcusip,
+    -- poolcurrfaceinplatt.name,
+    poolcurrfaceinplattfour.platcusip,
+    poolcurrfaceinplattfour.istbaelig AS plattbaelig
+    -- currplats.istbaelig
+    -- currplats.name
+    -- poolsforcurrfaceplat.cusip AS poolcusip, 
+    -- (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, 
+    -- poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
+INTO TEMP TABLE poolcurrfaceinplattfive
+FROM platcolls
+INNER JOIN poolcurrfaceinplattfour
+ON poolcurrfaceinplattfour.name = platcolls.poolname
+INNER JOIN currplats
+ON currplats.cusip = platcolls.cusip
+WHERE poolcurrfaceinplattfour.istbaelig IS TRUE
+-- AND currplats.istbaelig IS TRUE
+
+SELECT 
+    COUNT (DISTINCT cusip)
+FROM 
+    poolcurrfaceinplattfive
+-- WHERE istbaelig IS TRUE;
+
+SELECT
+    -- DISTINCT platcolls.cusip
+    platcolls.cusip,
+    currplats.name,
+    currplats.istbaelig,
+    platcolls.faceinplatinum/100 AS ofinplatinum,
+    -- poolcurrfaceinplatt.platcusip,
+    -- poolcurrfaceinplatt.name,
+    poolcurrfaceinplattfive.platcusip,
+    poolcurrfaceinplattfive.istbaelig AS plattbaelig
+    -- currplats.istbaelig
+    -- currplats.name
+    -- poolsforcurrfaceplat.cusip AS poolcusip, 
+    -- (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, 
+    -- poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
+INTO TEMP TABLE poolcurrfaceinplattsix
+FROM platcolls
+INNER JOIN poolcurrfaceinplattfive
+ON poolcurrfaceinplattfive.name = platcolls.poolname
+INNER JOIN currplats
+ON currplats.cusip = platcolls.cusip
+WHERE poolcurrfaceinplattfive.istbaelig IS TRUE
+-- AND currplats.istbaelig IS TRUE
+
+SELECT 
+    COUNT (DISTINCT cusip)
+FROM 
+    poolcurrfaceinplattsix
+WHERE istbaelig IS TRUE;
+
+
+SELECT
+    -- DISTINCT platcolls.cusip
+    platcolls.cusip,
+    currplats.name,
+    currplats.istbaelig,
+    platcolls.faceinplatinum/100 AS ofinplatinum,
+    -- poolcurrfaceinplatt.platcusip,
+    -- poolcurrfaceinplatt.name,
+    poolcurrfaceinplattsix.platcusip,
+    poolcurrfaceinplattsix.istbaelig AS plattbaelig
+    -- currplats.istbaelig
+    -- currplats.name
+    -- poolsforcurrfaceplat.cusip AS poolcusip, 
+    -- (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, 
+    -- poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
+-- INTO TEMP TABLE poolcurrfaceinplattseven
+FROM platcolls
+INNER JOIN poolcurrfaceinplattsix
+ON poolcurrfaceinplattsix.name = platcolls.poolname
+INNER JOIN currplats
+ON currplats.cusip = platcolls.cusip
+WHERE poolcurrfaceinplattsix.istbaelig IS TRUE
+-- AND currplats.istbaelig IS TRUE
+
+SELECT 
+    COUNT (DISTINCT cusip)
+FROM 
+    poolcurrfaceinplattsix
+WHERE istbaelig IS TRUE;
 
 
 
@@ -326,6 +514,15 @@ INTO TEMP TABLE totalpoolcurrfaceinplatt
 FROM poolcurrfaceinplatt
 GROUP BY poolcurrfaceinplatt.poolcusip;
 
+SELECT 
+    poolcurrfaceinplatt.poolcusip, 
+    SUM(poolcurrfaceinplatt.currfaceinplat) as sumpoolcfinplat
+INTO TEMP TABLE totalpoolcurrfaceinplatttbaelig  
+FROM poolcurrfaceinplatt
+WHERE istbaelig IS TRUE
+GROUP BY poolcurrfaceinplatt.poolcusip;
+LIMIT 3;
+
 -- LIMIT 10;
 
 -- this should be the current face of all pools minus the current face in the plats so should probably pair this down
@@ -334,11 +531,17 @@ GROUP BY poolcurrfaceinplatt.poolcusip;
 SELECT 
     poolsforcurrfaceplat.cusip, 
     poolsforcurrfaceplat."interestRate", 
-    poolsforcurrfaceplat."remainingBalance" - COALESCE(sumpoolcfinplat, 0) AS poolcfminuscfinplat
-INTO TEMP TABLE poolcurrfaceminuscurrentfaceinplatt 
+    -- totalpoolcurrfaceinplatt.sumpoolcfinplat,
+    -- totalpoolcurrfaceinplatttbaelig.sumpoolcfinplat,
+    poolsforcurrfaceplat."remainingBalance" - COALESCE(totalpoolcurrfaceinplatt.sumpoolcfinplat, 0) + COALESCE(totalpoolcurrfaceinplatttbaelig.sumpoolcfinplat, 0) AS poolcfminuscfinplat
+-- INTO TEMP TABLE poolcurrfaceminuscurrentfaceinplatt 
 FROM poolsforcurrfaceplat
 LEFT JOIN totalpoolcurrfaceinplatt
-ON poolsforcurrfaceplat.cusip = totalpoolcurrfaceinplatt.poolcusip;
+ON poolsforcurrfaceplat.cusip = totalpoolcurrfaceinplatt.poolcusip
+LEFT JOIN totalpoolcurrfaceinplatttbaelig
+ON poolsforcurrfaceplat.cusip = totalpoolcurrfaceinplatttbaelig.poolcusip
+WHERE totalpoolcurrfaceinplatt.sumpoolcfinplat > totalpoolcurrfaceinplatttbaelig.sumpoolcfinplat;
+-- LIMIT 3;
 
 
 
@@ -361,8 +564,15 @@ SELECT
     SUM(poolcfminuscfinplat) AS sumofpoolcfminusplatcf
 INTO TEMP TABLE suminterestratepool
 FROM poolcurrfaceminuscurrentfaceinplatt
-GROUP BY "interestRate";
+GROUP BY "interestRate"
+ORDER BY "interestRate";
 
+
+SELECT *
+FROM checkone
+INNER JOIN suminterestratepool
+ON suminterestratepool."interestRate" = checkone."interestRate"
+WHERE checkone.sum > suminterestratepool.sumofpoolcfminusplatcf + 1;
 
 
 -- LIMIT 10;
@@ -631,3 +841,52 @@ ON platinums.cusip = fedholdings.cusip
           8.5 | 4544726.9399999995
             9 |  706706.5199999999
           9.5 |           92552.21
+
+
+          ---------------------------------------------
+
+-- Tiny changes from droping the som not tba elig platinum 
+
+           interestRate | sumofpoolcfminusplatcf
+--------------+------------------------
+            1 |             1074750.93
+          1.5 |          4930417401.09
+            2 |     335987273543.91785
+          2.5 |        357631597895.84
+            3 |      314883151650.5401
+          3.5 |     256736112762.39987
+            4 |     116879528507.59013
+          4.5 |         48336702802.24
+         4.75 |            11319669.24
+            5 |     18281904620.450005
+          5.1 |              226205.49
+         5.25 |              100040.41
+         5.45 |     339856.76999999996
+          5.5 |      5457388170.369999
+          5.6 |               36319.86
+         5.75 |              125371.99
+            6 |     3103277841.8266664
+          6.1 |                4478.38
+        6.375 |               22060.95
+         6.49 |                1718.56
+          6.5 |     1247597711.8915668
+         6.65 |              156448.53
+         6.69 |                8575.36
+         6.75 |     55792.740000000005
+         6.88 |               89739.45
+            7 |     226513171.89540467
+         7.25 |              109352.72
+        7.265 |                 950.42
+         7.45 |               73157.33
+          7.5 |      67955386.14999998
+         7.75 |                 7911.9
+          7.8 |               68571.15
+         7.85 |                9079.53
+        7.875 |                27312.8
+          7.9 |               19252.66
+            8 |     30898579.909999996
+         8.25 |               40231.21
+          8.5 |      4544726.939999997
+            9 |      706706.5199999999
+          9.5 |               92552.21
+
