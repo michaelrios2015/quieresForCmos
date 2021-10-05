@@ -375,7 +375,7 @@ FROM
 WHERE istbaelig IS TRUE;
 
 
-----something has gone wrong
+----something has gone wrong seems to be ok now but really need to clean this up so I can actually check it
 
 SELECT
     -- DISTINCT platcolls.cusip
@@ -385,7 +385,7 @@ SELECT
     platcolls.faceinplatinum/100 AS ofinplatinum,
     -- poolcurrfaceinplatt.platcusip,
     -- poolcurrfaceinplatt.name,
-    poolcurrfaceinplattthree.platcusip,
+    poolcurrfaceinplattthree.cusip,
     poolcurrfaceinplattthree.name,
     poolcurrfaceinplattthree.istbaelig AS plattbaelig,
     currplatsagain.name,
@@ -403,7 +403,7 @@ ON poolcurrfaceinplattthree.name = platcolls.poolname
 INNER JOIN currplats
 ON currplats.cusip = platcolls.cusip
 INNER JOIN currplats AS currplatsagain
-ON currplatsagain.cusip = poolcurrfaceinplattthree.platcusip
+ON currplatsagain.cusip = poolcurrfaceinplattthree.cusip
 -- WHERE poolcurrfaceinplattthree.istbaelig IS TRUE
 LIMIT 2;
 
