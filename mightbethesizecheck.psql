@@ -195,12 +195,13 @@ SELECT
     -- currplats.factor,
     currplats.interestrate,
     currplats.remainingbalance / currplats.originalface AS calcfactor,
-    (platcolls.faceinplatinum/100) * (currplats.remainingbalance / currplats.originalface) AS currfacewithplatfact,
     poolsforcurrfaceplat.cusip AS poolcusip, 
     (platcolls.faceinplatinum/100) AS ofinplat, 
     poolsforcurrfaceplat."interestRate",
     poolsforcurrfaceplat."remainingBalance" / poolsforcurrfaceplat.originalface as factortwo,
-    (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" / poolsforcurrfaceplat.originalface) AS currfaceinplat
+    poolsforcurrfaceplat.originalface,
+    poolsforcurrfaceplat.originalface - (platcolls.faceinplatinum/100) AS tradeableof,
+    poolsforcurrfaceplat.originalface - (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" / poolsforcurrfaceplat.originalface) AS tradeablecf
 INTO TEMP TABLE poolcurrfaceinplatttest
 FROM platcolls
 INNER JOIN poolsforcurrfaceplat
@@ -208,6 +209,15 @@ ON poolsforcurrfaceplat.name = platcolls.poolname
 AND poolsforcurrfaceplat.indicator = platcolls.indicator
 INNER JOIN currplats
 ON currplats.cusip = platcolls.cusip;
+
+SELECT 
+    interestRate AS coupon,
+    SUM(tradeablecf) AS tradeablecf
+FROM poolcurrfaceinplatttest
+GROUP BY interestRate
+ORDER BY interestRate
+LIMIT 2;
+
 
 LIMIT 2;
 
@@ -220,7 +230,15 @@ SELECT
 FROM 
     poolcurrfaceinplatttest
 WHERE 
-    istbaelig IS TRUE
+    istbaelig IS TRUE;
+
+SELECT 
+    *
+FROM 
+    poolcurrfaceinplatttest
+WHERE 
+    istbaelig IS NOT TRUE
+LIMIT 100;
 
 
 SELECT 
@@ -230,7 +248,7 @@ INTO TEMP TABLE plattstocheck
 FROM 
     poolcurrfaceinplatttest
 WHERE 
-    istbaelig IS TRUE
+    istbaelig IS TRUE;
 
 
 -- now trying to start a second round so seems to join ok... but what to do now...
@@ -255,7 +273,13 @@ SELECT
     platcolls.faceinplatinum/100 AS ofinplatinum,
     -- poolcurrfaceinplatt.platcusip,
     -- poolcurrfaceinplatt.name,
-    plattstocheck.platcusip
+    plattstocheck.platcusip,
+    -- currplatsagain.name,
+    currplatsagain.interestrate,
+    currplatsagain.remainingbalance / currplatsagain.originalface AS calcfactor,
+    currplatsagain.originalface - (platcolls.faceinplatinum/100) AS tradeableof,
+    currplatsagain.originalface - (platcolls.faceinplatinum/100) * (currplatsagain.remainingbalance / currplatsagain.originalface) AS tradeablecf
+    -- currplatsagain.factor
     -- poolcurrfaceinplatt.istbaelig AS plattbaelig
     -- currplats.istbaelig
     -- currplats.name
@@ -268,8 +292,21 @@ INNER JOIN plattstocheck
 ON plattstocheck.name = platcolls.poolname
 INNER JOIN currplats
 ON currplats.cusip = platcolls.cusip
+INNER JOIN currplats AS currplatsagain
+ON currplatsagain.cusip = plattstocheck.platcusip
 -- WHERE poolcurrfaceinplatt.istbaelig IS TRUE
 -- AND currplats.istbaelig IS TRUE
+
+LIMIT 2;
+
+
+SELECT 
+    interestRate AS coupon,
+    SUM(tradeablecf) AS tradeablecf
+FROM poolcurrfaceinplatttwo
+GROUP BY interestRate
+ORDER BY interestRate
+LIMIT 2;
 
 --------------------------------- two plats are not is tba eligible
 
@@ -303,19 +340,32 @@ SELECT
     -- poolcurrfaceinplatt.platcusip,
     -- poolcurrfaceinplatt.name,
     poolcurrfaceinplatttwo.platcusip,
-    poolcurrfaceinplatttwo.istbaelig AS plattbaelig
-    -- currplats.istbaelig
-    -- currplats.name
-    -- poolsforcurrfaceplat.cusip AS poolcusip, 
-    -- (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, 
-    -- poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
-INTO TEMP TABLE poolcurrfaceinplattthree
+    poolcurrfaceinplatttwo.istbaelig AS plattbaelig,
+    currplatsagain.name,
+    currplatsagain.interestrate,
+    currplatsagain.remainingbalance / currplatsagain.originalface AS calcfactor,
+    currplatsagain.originalface - (platcolls.faceinplatinum/100) AS tradeableof,
+    currplatsagain.originalface - (platcolls.faceinplatinum/100) * (currplatsagain.remainingbalance / currplatsagain.originalface) AS tradeablecf,
+    currplatsagain.factor
+-- INTO TEMP TABLE poolcurrfaceinplattthree
 FROM platcolls
 INNER JOIN poolcurrfaceinplatttwo
 ON poolcurrfaceinplatttwo.name = platcolls.poolname
 INNER JOIN currplats
 ON currplats.cusip = platcolls.cusip
+INNER JOIN currplats AS currplatsagain
+ON currplatsagain.cusip = poolcurrfaceinplatttwo.platcusip
 WHERE poolcurrfaceinplatttwo.istbaelig IS TRUE
+LIMIT 2;
+
+SELECT 
+    interestRate AS coupon,
+    SUM(tradeablecf) AS tradeablecf
+FROM poolcurrfaceinplattthree
+GROUP BY interestRate
+ORDER BY interestRate
+LIMIT 2;
+
 -- AND currplats.istbaelig IS TRUE
 
 SELECT 
@@ -324,6 +374,8 @@ FROM
     poolcurrfaceinplattthree
 WHERE istbaelig IS TRUE;
 
+
+----something has gone wrong
 
 SELECT
     -- DISTINCT platcolls.cusip
@@ -334,20 +386,34 @@ SELECT
     -- poolcurrfaceinplatt.platcusip,
     -- poolcurrfaceinplatt.name,
     poolcurrfaceinplattthree.platcusip,
-    poolcurrfaceinplattthree.istbaelig AS plattbaelig
-    -- currplats.istbaelig
-    -- currplats.name
-    -- poolsforcurrfaceplat.cusip AS poolcusip, 
-    -- (platcolls.faceinplatinum/100) * (poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface) AS currfaceinplat, 
-    -- poolsforcurrfaceplat."remainingBalance" /poolsforcurrfaceplat.originalface as factortwo
-INTO TEMP TABLE poolcurrfaceinplattfour
+    poolcurrfaceinplattthree.name,
+    poolcurrfaceinplattthree.istbaelig AS plattbaelig,
+    currplatsagain.name,
+    currplatsagain.originalface,
+    currplatsagain.remainingbalance, 
+    currplatsagain.interestrate,
+    currplatsagain.remainingbalance / currplatsagain.originalface AS calcfactor,
+    currplatsagain.originalface - (platcolls.faceinplatinum/100) AS tradeableof,
+    currplatsagain.originalface - (platcolls.faceinplatinum/100) * (currplatsagain.remainingbalance / currplatsagain.originalface) AS tradeablecf,
+    currplatsagain.factor
+-- INTO TEMP TABLE poolcurrfaceinplattfour
 FROM platcolls
 INNER JOIN poolcurrfaceinplattthree
 ON poolcurrfaceinplattthree.name = platcolls.poolname
 INNER JOIN currplats
 ON currplats.cusip = platcolls.cusip
-WHERE poolcurrfaceinplattthree.istbaelig IS TRUE
--- AND currplats.istbaelig IS TRUE
+INNER JOIN currplats AS currplatsagain
+ON currplatsagain.cusip = poolcurrfaceinplattthree.platcusip
+-- WHERE poolcurrfaceinplattthree.istbaelig IS TRUE
+LIMIT 2;
+
+SELECT 
+    interestRate AS coupon,
+    SUM(tradeablecf) AS tradeablecf
+FROM poolcurrfaceinplattthree
+GROUP BY interestRate
+ORDER BY interestRate
+LIMIT 2;
 
 SELECT 
     COUNT (DISTINCT cusip)
