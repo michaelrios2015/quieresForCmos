@@ -74,18 +74,7 @@ ORDER BY poolstestforcurrfaceindicx."interestRate";
 
 -- current face of pool - current face in platinums + current face in platinums
 
--- Aside from the cases where TBA eligible pools are dumped into a non TBA eligible platinum the sizes we get here should be the same as case 1.
-----OOOHHHH maybe I am doing this all wrong 
-
--- so I have something that should get the pool curent face - the current face of pool in the plat 
-
--- this
--- current face of pool - current face in platinums + current face in platinums
-
--- but which pools do we want??
-
--- now trying to replicate the size stuff
--- so I had this just joins the pool to the poolbody and filters out the ones we don't want 
+-- this gets the G2 pools
 
 SELECT   
     pools.cusip,
@@ -97,7 +86,7 @@ SELECT
     poolbodies."remainingBalance",
     poolbodies.factor,
     poolbodies.date 
-INTO TEMP TABLE poolsforcurrfaceplat 
+INTO TEMP TABLE g2pools 
 FROM pools 
 INNER JOIN poolbodies
 ON pools.cusip = poolbodies.cusip 
@@ -107,7 +96,42 @@ AND pools.type = 'SF'
 AND pools.istbaelig = 'true';
 
 
--------------- going to need platinums
+SELECT 
+    -- COUNT(*)
+    platinums.cusip,
+    platinums.name,
+    platinumbodies.indicator,
+    platinums.type,
+    platinums.originalface,
+    platinumbodies.interestrate,
+    platinumbodies.remainingbalance,
+    platinumbodies.factor,
+    platinumbodies.date 
+INTO TEMP TABLE g2plats 
+FROM platinums 
+INNER JOIN platinumbodies
+ON platinums.cusip = platinumbodies.cusip 
+WHERE platinumbodies.date = '2021-08-01'
+AND platinumbodies.indicator = 'M'
+AND platinums.type = 'SP'
+AND platinumbodies.istbaelig IS TRUE
+-- LIMIT 2;
+
+-- WE get 2456 for August
+
+-- Some of the ones with coupon 7
+cmos_builder=# SELECT * FROM g2pools where "interestRate" = 7;
+   cusip   |  name  | indicator | type | originalface | interestRate | remainingBalance |   factor   |    date
+-----------+--------+-----------+------+--------------+--------------+------------------+------------+------------
+ 36202ACG0 | 000071 | M         | SF   |      5403837 |            7 |           365.84 |   6.77e-05 | 2021-08-01
+ 36202AP68 | 000445 | M         | SF   |     14043985 |            7 |         18400.37 |  0.0013102 | 2021-08-01
+ 36202AS99 | 000544 | M         | SF   |     21521474 |            7 |         13351.76 | 0.00062039 | 2021-08-01
+ 36202AXK8 | 000682 | M         | SF   |     14166658 |            7 |         10201.73 | 0.00072012 | 2021-08-01
+ 36202BA88 | 000931 | M         | SF   |      6429363 |            7 |           7447.8 |  0.0011584 | 2021-08-01
+ 36202BHT5 | 001142 | M         | SF   |     47180271 |            7 |         13091.52 | 0.00027748 | 2021-08-01
+ 36202BKZ7 | 001212 | M         | SF   |     75400435 |            7 |         48223.91 | 0.00063957 | 2021-08-01
+
+-------------- getting the August platinum info and comboinong it with the non changing info
 
 SELECT 
     platinums.cusip,
@@ -124,7 +148,7 @@ INNER JOIN platinumbodies
 ON platinums.cusip = platinumbodies.cusip
 WHERE platinumbodies.date = '2021-08-01';
 
--- Just combining platinum info with platcolls to make life easier later  
+-- Just combining platinum info with platcolls to make life easier later, are we using this??  
 
 SELECT 
     platcolls.cusip,
@@ -156,40 +180,53 @@ ON platcolls.cusip = currplats.cusip;
 -- STEP one get current face of pools in platinums  
 
 SELECT 
-    SUM(COALESCE(platcollswithcurrplats.faceinplatinum, 0)/100) as ofinplat, 
-    poolsforcurrfaceplat.cusip AS poolcusip 
-INTO TEMP TABLE pooloriginalfaceinplats
-FROM platcollswithcurrplats
-RIGHT JOIN poolsforcurrfaceplat
-ON poolsforcurrfaceplat.name = platcollswithcurrplats.poolname
-AND poolsforcurrfaceplat.indicator = platcollswithcurrplats.indicator
--- WHERE platcollswithcurrplats.cusip IS NULL
--- WHERE poolsforcurrfaceplat.cusip = '36202E2A6'
--- ORDER BY platcollswithcurrplats.faceinplatinum
-GROUP BY poolsforcurrfaceplat.cusip;
--- LIMIT 2;
+    -- *
+    -- COUNT(*)
+    -- COALESCE(platcolls.faceinplatinum, 0) 
+    SUM(COALESCE(platcolls.faceinplatinum, 0)/100) as ofinplat,
+    g2pools.cusip AS poolcusip,
+    g2pools.name,
+    g2pools.indicator,
+    g2pools.type,
+    g2pools.originalface,
+    g2pools."interestRate",
+    g2pools."remainingBalance",
+    g2pools.factor,
+    g2pools.date  
+INTO TEMP TABLE g2poolsofinplats
+FROM platcolls
+RIGHT JOIN g2pools
+ON g2pools.name = platcolls.poolname
+AND g2pools.indicator = platcolls.indicator
+-- WHERE platcolls.cusip IS NULL
+-- WHERE g2pools.cusip = '36202DP88'
+-- ORDER BY platcolls.faceinplatinum
+GROUP BY 
+    g2pools.cusip,
+    g2pools.name,
+    g2pools.indicator,
+    g2pools.type,
+    g2pools.originalface,
+    g2pools."interestRate",
+    g2pools."remainingBalance",
+    g2pools.factor,
+    g2pools.date
+-- LIMIT 10;
 
-
+-- we have 685 pools with no original face in platinums 
 ------------------ Step 2 find tradeblae current face
 
 SELECT 
-    -- *
-    pooloriginalfaceinplats.ofinplat,
-    poolsforcurrfaceplat.cusip,
-    poolsforcurrfaceplat.name,
-    poolsforcurrfaceplat.indicator,
-    poolsforcurrfaceplat."interestRate" AS poolir,
-    poolsforcurrfaceplat."remainingBalance" / poolsforcurrfaceplat.originalface as factortwo,
-    poolsforcurrfaceplat.factor,
-    poolsforcurrfaceplat.originalface,
-    poolsforcurrfaceplat.originalface - pooloriginalfaceinplats.ofinplat AS tradeableof,
-    (poolsforcurrfaceplat.originalface - pooloriginalfaceinplats.ofinplat) * (poolsforcurrfaceplat."remainingBalance" / poolsforcurrfaceplat.originalface) AS tradeablecf
-INTO TEMP TABLE pooltradeablecurrfaceinplats
-FROM pooloriginalfaceinplats
-INNER JOIN poolsforcurrfaceplat
-ON pooloriginalfaceinplats.poolcusip = poolsforcurrfaceplat.cusip
+    *,
+    "remainingBalance" / originalface as factortwo,
+    originalface - ofinplat AS tradeableof,
+    (originalface - ofinplat) * ("remainingBalance" / originalface) AS tradeablecf
+INTO TEMP TABLE g2poolstradeablecurrfaceinplats
+FROM g2poolsofinplats
+-- INNER JOIN poolsforcurrfaceplat
+-- ON pooloriginalfaceinplats.poolcusip = poolsforcurrfaceplat.cusip
 -- WHERE platcollswithcurrplats.cusip IS NULL
--- WHERE poolsforcurrfaceplat.cusip = '36202E2A6'
+-- WHERE poolcusip = '36179M2N9'
 -- WHERE poolsforcurrfaceplat.cusip IS NULL
 -- WHERE poolsforcurrfaceplat.originalface - (pooloriginalfaceinplats.ofinplat) < 0
 -- ORDER BY pooloriginalfaceinplats.ofinplat DESC
@@ -200,12 +237,12 @@ ON pooloriginalfaceinplats.poolcusip = poolsforcurrfaceplat.cusip
 -- this just sums the tradeable current face and groups them by coupon (interest rate) 
 
 SELECT 
-    poolir AS coupon,
+    "interestRate" AS coupon,
     SUM(tradeablecf) AS tradeablecf
-INTO TEMP TABLE poolstradeablecf
-FROM pooltradeablecurrfaceinplats
-GROUP BY poolir
-ORDER BY poolir;
+INTO TEMP TABLE g2poolstradeablecf
+FROM g2poolstradeablecurrfaceinplats
+GROUP BY "interestRate"
+ORDER BY "interestRate"
 -- LIMIT 2;
 
 
@@ -213,28 +250,29 @@ ORDER BY poolir;
 
 SELECT *
 FROM poolscfbycoupon
-LEFT JOIN poolstradeablecf
-ON poolscfbycoupon."interestRate" = poolstradeablecf.coupon
-WHERE poolscfbycoupon.sum > poolstradeablecf.tradeablecf + 1;
+LEFT JOIN g2poolstradeablecf
+ON poolscfbycoupon."interestRate" = g2poolstradeablecf.coupon
+WHERE poolscfbycoupon.sum > g2poolstradeablecf.tradeablecf + 1;
 -- LIMIT 1;
 
 ---------------------------------- now need to check to see which patinums we used 
 
 SELECT 
-    DISTINCT (platcollswithcurrplats.cusip) AS platcusip,
-    platcollswithcurrplats.istbaelig
+    -- *
+    DISTINCT (platcolls.cusip) AS platcusip
+    -- platcollswithcurrplats.istbaelig
 INTO TEMP TABLE plattstocheck
-FROM platcollswithcurrplats
-INNER JOIN poolsforcurrfaceplat
-ON poolsforcurrfaceplat.name = platcollswithcurrplats.poolname
-AND poolsforcurrfaceplat.indicator = platcollswithcurrplats.indicator
-WHERE platcollswithcurrplats.istbaelig IS TRUE
+FROM platcolls
+INNER JOIN g2pools
+ON platcolls.poolname = g2pools.name
+AND platcolls.indicator = g2pools.indicator
+-- WHERE platcollswithcurrplats.istbaelig IS TRUE
 -- WHERE poolsforcurrfaceplat.cusip = '36202E2A6'
 -- ORDER BY platcollswithcurrplats.faceinplatinum
 -- GROUP BY poolsforcurrfaceplat.cusip;
 -- LIMIT 10;
 
-
+-- we get 402 unique platinums 12 of these should be labeled not tba eligible but can't see that yet
 ---------------------------------------------------------------------------
 
 -- ROUND TWO
@@ -242,6 +280,7 @@ WHERE platcollswithcurrplats.istbaelig IS TRUE
 -- the plats to check as they are tba eligible and have G2 Original face in them
 
 SELECT 
+    -- *
     cusip,
     name,
     originalface,
@@ -253,28 +292,42 @@ SELECT
 INTO TEMP TABLE plattstocheckwithinfo    
 FROM plattstocheck
 INNER JOIN currplats
-ON plattstocheck.platcusip = currplats.cusip;
+ON plattstocheck.platcusip = currplats.cusip
+WHERE currplats.istbaelig IS TRUE
 -- LIMIT 5;
 
-
--- STEP one get current face of platnums in other platinums  
+--  so I have 3 more plats in the g2 then when just checking plats with current face ???
 
 SELECT 
+    *
+FROM g2plats
+LEFT JOIN plattstocheckwithinfo
+ON g2plats.cusip = plattstocheckwithinfo.cusip
+WHERE plattstocheckwithinfo IS NULL
+LIMIT 2;
+
+-- the platinums we check we have 390 of them 
+
+-- STEP one get current face of platnums in other platinums, this is what we want to do right??  
+-- am I supposed to weed some out or something else?? 
+
+SELECT 
+    -- *
     -- COUNT(*),
-    SUM(COALESCE(platcollswithcurrplats.faceinplatinum, 0)/100) as ofindifferentplat, 
+    SUM(COALESCE(platcolls.faceinplatinum, 0)/100) as ofindifferentplat, 
     plattstocheckwithinfo.cusip AS platcusip
     -- plattstocheckwithinfo.name 
 INTO TEMP TABLE platoriginalfaceinplats
-FROM platcollswithcurrplats
+FROM platcolls
 RIGHT JOIN plattstocheckwithinfo
-ON plattstocheckwithinfo.name = platcollswithcurrplats.poolname
--- WHERE platcollswithcurrplats.cusip IS NULL
+ON platcolls.poolname = plattstocheckwithinfo.name 
+-- WHERE platcolls.cusip IS NULL
 -- ORDER BY platcollswithcurrplats.faceinplatinum
 GROUP BY 
     plattstocheckwithinfo.cusip 
---     plattstocheckwithinfo.name 
+    -- plattstocheckwithinfo.name 
 -- HAVING COUNT(*) > 1
--- ORDER BY SUM(COALESCE(platcollswithcurrplats.faceinplatinum, 0)/100) DESC
+-- ORDER BY SUM(COALESCE(platcolls.faceinplatinum, 0)/100) DESC
 -- LIMIT 2;
 
 
@@ -317,13 +370,15 @@ ORDER BY interestrate
 
 ------------------------------ add this to the pools tradabel current face
 
+---------------------------HOPEFULLY THIS IS ALL I NEED
+
 SELECT 
-    COALESCE(poolstradeablecf.coupon, platstradeablecf.coupon) AS coupon,
-    COALESCE(poolstradeablecf.tradeablecf, 0) + COALESCE(platstradeablecf.tradeablecf, 0) AS tradeablecf
-INTO TEMP TABLE poolsplusplatstradeablecf
-FROM poolstradeablecf
+    COALESCE(g2poolstradeablecf.coupon, platstradeablecf.coupon) AS coupon,
+    COALESCE(g2poolstradeablecf.tradeablecf, 0) + COALESCE(platstradeablecf.tradeablecf, 0) AS tradeablecf
+INTO TEMP TABLE g2poolsplusplatstradeablecf
+FROM g2poolstradeablecf
 LEFT JOIN platstradeablecf
-ON poolstradeablecf.coupon = platstradeablecf.coupon;
+ON g2poolstradeablecf.coupon = platstradeablecf.coupon;
 
 
 
@@ -332,32 +387,52 @@ ON poolstradeablecf.coupon = platstradeablecf.coupon;
 
 SELECT *
 FROM poolscfbycoupon
-LEFT JOIN poolsplusplatstradeablecf
-ON poolscfbycoupon."interestRate" = poolsplusplatstradeablecf.coupon
-WHERE poolscfbycoupon.sum > poolsplusplatstradeablecf.tradeablecf + 1;
+LEFT JOIN g2poolsplusplatstradeablecf
+ON poolscfbycoupon."interestRate" = g2poolsplusplatstradeablecf.coupon
+WHERE poolscfbycoupon.sum > g2poolsplusplatstradeablecf.tradeablecf + 1;
 -- LIMIT 1;
 
 ---------------------------------- now need to check to see which patinums we used 
 
 SELECT 
-    -- COUNT (DISTINCT (platcollswithcurrplats.cusip))
-    DISTINCT (platcollswithcurrplats.cusip),
-    platcollswithcurrplats.platname,
-    platcollswithcurrplats.originalface,
-    platcollswithcurrplats.interestrate,
-    platcollswithcurrplats.remainingbalance,
-    platcollswithcurrplats.factor,
-    platcollswithcurrplats.istbaelig,
-    platcollswithcurrplats.date
+    -- *
+    -- COUNT (DISTINCT (platcolls.cusip))
+    DISTINCT (platcolls.cusip)
 INTO TEMP TABLE plattstochecktwo
-FROM platcollswithcurrplats
+FROM platcolls
 INNER JOIN plattstocheckwithinfo 
-ON plattstocheckwithinfo.name = platcollswithcurrplats.poolname
-WHERE platcollswithcurrplats.istbaelig IS TRUE;
--- WHERE poolsforcurrfaceplat.cusip = '36202E2A6'
--- ORDER BY platcollswithcurrplats.faceinplatinum
--- GROUP BY poolsforcurrfaceplat.cusip;
+ON platcolls.poolname = plattstocheckwithinfo.name 
 -- LIMIT 10;
+
+
+
+SELECT 
+    -- *
+    currplats.cusip,
+    name,
+    originalface,
+    interestrate,
+    remainingbalance,
+    factor,
+    currplats.istbaelig,
+    date
+INTO TEMP TABLE plattstocheckwithinfotwo    
+FROM plattstochecktwo
+INNER JOIN currplats
+ON plattstochecktwo.cusip = currplats.cusip
+WHERE currplats.istbaelig IS TRUE
+LIMIT 2;
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -369,41 +444,48 @@ WHERE platcollswithcurrplats.istbaelig IS TRUE;
 -- STEP one get current face of platnums in other platinums  
 
 SELECT 
+    -- *
     -- COUNT(*),
-    SUM(COALESCE(platcollswithcurrplats.faceinplatinum, 0)/100) as ofindifferentplat, 
-    plattstochecktwo.cusip AS platcusip
-    -- plattstochecktwo.platname 
+    SUM(COALESCE(platcolls.faceinplatinum, 0)/100) as ofindifferentplat, 
+    plattstocheckwithinfotwo.cusip AS platcusip,
+    plattstocheckwithinfotwo.name, 
+    plattstocheckwithinfotwo.originalface,
+    plattstocheckwithinfotwo.interestrate,
+    plattstocheckwithinfotwo.remainingbalance,
+    plattstocheckwithinfotwo.factor,
+    plattstocheckwithinfotwo.istbaelig,
+    plattstocheckwithinfotwo.date
 INTO TEMP TABLE platoriginalfaceinplatstwo
-FROM platcollswithcurrplats
-RIGHT JOIN plattstochecktwo
-ON plattstochecktwo.platname = platcollswithcurrplats.poolname
--- WHERE platcollswithcurrplats.cusip IS NULL
--- ORDER BY platcollswithcurrplats.faceinplatinum
+FROM platcolls
+RIGHT JOIN plattstocheckwithinfotwo
+ON plattstocheckwithinfotwo.name = platcolls.poolname
+-- WHERE platcolls.cusip IS NULL
+-- ORDER BY platcolls.faceinplatinum
 GROUP BY 
-    plattstochecktwo.cusip 
---     plattstochecktwo.platname 
+    plattstocheckwithinfotwo.cusip, 
+    plattstocheckwithinfotwo.name,
+    plattstocheckwithinfotwo.originalface,
+    plattstocheckwithinfotwo.interestrate,
+    plattstocheckwithinfotwo.remainingbalance,
+    plattstocheckwithinfotwo.factor,
+    plattstocheckwithinfotwo.istbaelig,
+    plattstocheckwithinfotwo.date 
 -- HAVING COUNT(*) > 1
 -- ORDER BY SUM(COALESCE(platcollswithcurrplats.faceinplatinum, 0)/100) DESC
--- LIMIT 2;
+-- LIMIT 10;
 
 
 ------------------ Step 2 find tradeblae current face
 
 SELECT 
-    -- *
-    platoriginalfaceinplatstwo.ofindifferentplat,
-    currplats.cusip,
-    currplats.name,
-    currplats.interestrate,
-    currplats.remainingbalance / currplats.originalface as factortwo,
-    currplats.factor,
-    currplats.originalface,
-    currplats.originalface - platoriginalfaceinplatstwo.ofindifferentplat AS tradeableof,
-    (currplats.originalface - platoriginalfaceinplatstwo.ofindifferentplat) * (currplats.remainingbalance / currplats.originalface) AS tradeablecf
-INTO TEMP TABLE platstradeablecurrfaceinplatstwo
+    *,
+    remainingbalance / originalface AS calcfactor,
+    originalface - ofindifferentplat AS tradeableof,
+    (originalface - ofindifferentplat) * (remainingbalance / originalface) AS tradeablecf
+-- -- INTO TEMP TABLE platstradeablecurrfaceinplatstwo
 FROM platoriginalfaceinplatstwo
-INNER JOIN currplats
-ON platoriginalfaceinplatstwo.platcusip = currplats.cusip
+-- INNER JOIN currplats
+-- ON platoriginalfaceinplatstwo.platcusip = currplats.cusip
 -- WHERE currplats.originalface - platoriginalfaceinplatstwo.ofindifferentplat < 0
 -- ORDER BY pooloriginalfaceinplats.ofinplat DESC
 -- ORDER BY currplats.originalface - platoriginalfaceinplatstwo.ofindifferentplat ASC
@@ -411,6 +493,13 @@ ON platoriginalfaceinplatstwo.platcusip = currplats.cusip
 
 
 -- this just sums the tradeable current face and groups them by coupon (interest rate) 
+
+
+
+
+
+-- STopped aroung here 10/7/21
+
 
 SELECT 
     interestrate AS coupon,
@@ -505,7 +594,7 @@ WHERE platcollswithcurrplats.istbaelig IS TRUE;
 
 
 
-
+   
 
 
 3000000 + 6000000 + 12500000 + 3675837200 + 931017500 + 508457600 + 200000000 + 392122900 + 314202900 + 19700000 + 1878097500 + 70473800 + 57500000 + 451400000 + 17000000 + 78178700 + 3300000 + 130600000 + 3935100 + 505200000 + 31300000 + 320000000 + 18000000 + 3599900 + 5000000 + 36356700 + 29100000 + 21466900 + 8000000 + 4250000 + 72500000 + 85000000 + 21453300 + 84000000 + 190414300 + 132528200

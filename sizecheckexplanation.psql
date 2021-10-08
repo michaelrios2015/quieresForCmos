@@ -1,0 +1,22 @@
+-- step one I run this to get the G2 pools for August 
+
+SELECT   
+    pools.cusip,
+    pools.name,
+    pools.indicator,
+    pools.type,
+    pools.originalface,
+    poolbodies."interestRate",
+    poolbodies."remainingBalance",
+    poolbodies.factor,
+    poolbodies.date 
+INTO TEMP TABLE g2pools 
+FROM pools 
+INNER JOIN poolbodies
+ON pools.cusip = poolbodies.cusip 
+WHERE poolbodies.date = '2021-08-01'
+AND pools.indicator = 'M'
+AND pools.type = 'SF'
+AND pools.istbaelig = 'true';
+
+-- I get a total of 2456

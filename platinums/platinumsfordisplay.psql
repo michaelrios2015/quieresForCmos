@@ -1,0 +1,270 @@
+
+
+-- these are the queires I am using to change my pool data into something I can export into depoloyed app
+
+-- temp tables for the pools part 1
+
+-- this just ties the pools and poolbodies together for the current month 
+SELECT   
+    platinums.cusip,
+    platinums.name,
+    platinumbodies.indicator,
+    platinums.issuedate,
+    platinums.originalface,
+    platinumbodies.remainingbalance,
+    platinumbodies.factor,
+    platinumbodies.gwac,
+    platinumbodies.wam,
+    platinumbodies.wala,
+    platinumbodies.date
+INTO TEMP TABLE platscurr 
+FROM platinums 
+INNER JOIN platinumbodies
+ON platinums.cusip = platinumbodies.cusip 
+WHERE platinumbodies.date = '2021-06-01';
+
+-- this is just the poolpredictions for the next month, I call it current because it's a prediction so one month ahead is current
+-- so I need to make platinum predictions
+
+-- and do I want to include that in platinumbodies.. probably
+
+
+SELECT *
+-- INTO TEMP TABLE poolpredictionscurr
+FROM poolpredictions
+WHERE poolpredictions.date = '2021-07-01';
+
+-- ditto for poolfhavas
+
+SELECT *
+INTO TEMP TABLE poolfhavascurr 
+FROM poolfhavas
+WHERE poolfhavas.date = '2021-07-01';
+
+
+-- So to combine Poolbodies, PoolPredictions, PoolFHAVAs we used this 
+ 
+
+SELECT
+  poolscurr.cusip,
+  poolscurr.name,
+  poolscurr.indicator,  
+  poolscurr.issuedate,
+  poolscurr.originalface,
+  poolscurr.factor,
+  poolscurr."GWAC",
+  poolscurr."WAM",
+  poolscurr."WALA",
+  poolpredictionscurr.cpr,
+  poolpredictionscurr."cprNext",
+  poolfhavascurr.va,
+  poolscurr.date
+FROM
+  poolscurr
+  LEFT JOIN poolpredictionscurr ON (poolscurr.cusip = poolpredictionscurr.cusip)
+  LEFT JOIN poolfhavascurr ON (poolscurr.cusip = poolfhavascurr.cusip)
+-- WHERE poolscurr.cusip = '36224P6N3'  
+LIMIT
+  10;
+
+--PART II
+
+-- This is were I start using SQL to find the amount of original face in platinums:
+--  now with temp table does Active or teminated matter??
+
+-- the temp table that sums up original face in platinum them and groups them by poolname and indicator
+-- which we will use to join to our pool table 
+
+SELECT 
+    count(*),
+    poolname,
+    indicator,
+    SUM(faceinplatinum) as ofinplat
+INTO TEMP TABLE ofinplatinum 
+FROM platcolls
+GROUP BY
+    poolname,
+    indicator
+
+-- This is just testing how temp table joins to pools
+
+SELECT
+  *
+FROM
+  pools
+INNER JOIN ofinplatinum 
+ON pools.name = ofinplatinum.poolname
+AND pools.indicator = ofinplatinum.indicator
+LIMIT
+  10;
+
+
+
+-- adding original face in platinum to our other pool data 
+
+
+SELECT
+  poolscurr.cusip,
+  poolscurr.name,
+  poolscurr.indicator,  
+  poolscurr.issuedate,
+  poolscurr.originalface,
+  poolscurr.factor,
+  poolscurr."GWAC",
+  poolscurr."WAM",
+  poolscurr."WALA",
+  poolpredictionscurr.cpr,
+  poolpredictionscurr."cprNext",
+  poolfhavascurr.va,
+  ofinplatinum.ofinplat,
+  poolscurr.date
+FROM
+  poolscurr
+  LEFT JOIN poolpredictionscurr ON (poolscurr.cusip = poolpredictionscurr.cusip)
+  LEFT JOIN poolfhavascurr ON (poolscurr.cusip = poolfhavascurr.cusip)
+  LEFT JOIN ofinplatinum 
+    ON poolscurr.name = ofinplatinum.poolname
+    AND poolscurr.indicator = ofinplatinum.indicator
+WHERE poolscurr.cusip = '36202AP76'  
+LIMIT
+  10;
+
+--seems to match up to old one
+
+
+--PART III
+
+-- adding original face in cmos 
+
+-- TEMP TABLE 
+-- not really sure how date is being used..... might have to remove it 
+
+SELECT
+    cusip,
+    date,
+    COUNT (*),
+    SUM(faceincmo) AS ofincmo
+INTO TEMP TABLE ofpoolincmo
+FROM
+    ofincmos
+GROUP BY
+    cusip,
+    date
+
+
+---now adding it to the earlier work
+
+SELECT
+  poolscurr.cusip,
+  poolscurr.name,
+  poolscurr.indicator,  
+  poolscurr.issuedate,
+  poolscurr.originalface,
+  poolscurr.factor,
+  poolscurr."GWAC",
+  poolscurr."WAM",
+  poolscurr."WALA",
+  poolpredictionscurr.cpr,
+  poolpredictionscurr."cprNext",
+  poolfhavascurr.va,
+  ofinplatinum.ofinplat,
+  ofpoolincmo.ofincmo,
+  poolscurr.date
+FROM
+  poolscurr
+  LEFT JOIN poolpredictionscurr ON (poolscurr.cusip = poolpredictionscurr.cusip)
+  LEFT JOIN poolfhavascurr ON (poolscurr.cusip = poolfhavascurr.cusip)
+  LEFT JOIN ofinplatinum 
+    ON poolscurr.name = ofinplatinum.poolname
+    AND poolscurr.indicator = ofinplatinum.indicator
+  LEFT JOIN ofpoolincmo ON poolscurr.cusip = ofpoolincmo.cusip 
+--WHERE poolscurr.cusip = '36224P6N3'  
+LIMIT
+  10;
+
+
+--- PART VI
+----now to add feds and we are good, the original face need to be converted into current face but that's not to bad
+--- so we seem to want the current face so not sure why we are converting it to original face and using the 
+--kuly data with june
+
+--temp table 
+
+SELECT * 
+INTO TEMP TABLE fedholdingscurr
+FROM fedholdings
+WHERE fedholdings.asofdate = '2021-07-21'
+
+
+  
+-- joining it to other stuff 
+
+SELECT
+  poolscurr.cusip,
+  poolscurr.name,
+  poolscurr.indicator,  
+  poolscurr.issuedate,
+  poolscurr.originalface,
+  poolscurr.factor,
+  poolscurr."GWAC",
+  poolscurr."WAM",
+  poolscurr."WALA",
+  poolpredictionscurr.cpr,
+  poolpredictionscurr."cprNext",
+  poolfhavascurr.va,
+  ofinplatinum.ofinplat,
+  ofpoolincmo.ofincmo,
+  fedholdingscurr.currentfacevalue / poolscurr.factor AS originalfacefed,
+  poolscurr.date
+FROM
+  poolscurr
+  LEFT JOIN poolpredictionscurr ON (poolscurr.cusip = poolpredictionscurr.cusip)
+  LEFT JOIN poolfhavascurr ON (poolscurr.cusip = poolfhavascurr.cusip)
+  LEFT JOIN ofinplatinum 
+    ON poolscurr.name = ofinplatinum.poolname
+    AND poolscurr.indicator = ofinplatinum.indicator
+  LEFT JOIN ofpoolincmo ON poolscurr.cusip = ofpoolincmo.cusip 
+  LEFT JOIN fedholdingscurr ON poolscurr.cusip = fedholdingscurr.cusip  
+  WHERE poolscurr.cusip = '36202DVX6'  
+-- WHERE fedholdingscurr.currentfacevalue IS NOT NULL
+LIMIT
+  10;
+
+
+---- the old way seems to be the same as the current way 
+
+SELECT pools.cusip, pools.name, pools.issuedate, pools.originalface, poolbodies.factor, poolbodies."GWAC", poolbodies."WAM", poolbodies."WALA", poolpredictions.cpr,  poolpredictions."cprNext", poolfhavas.va, poolbodies.date , x.sum AS ofinplat, y.sum AS ofincmo, fed.currentfacevalue/poolbodies.factor as ofinfed 
+FROM pools
+INNER JOIN poolbodies
+ON (pools.cusip = poolbodies.cusip)
+LEFT JOIN poolpredictions
+ON (poolbodies.cusip = poolpredictions.cusip)
+LEFT JOIN poolfhavas
+ON (poolbodies.cusip = poolfhavas.cusip)
+LEFT JOIN (
+SELECT count(*), poolname, indicator, SUM(faceinplatinum)
+FROM platcolls
+GROUP BY poolname, indicator
+) AS x
+ON pools.name = x.poolname
+AND 
+pools.indicator = x.indicator
+LEFT JOIN (
+SELECT cusip, date, SUM(faceincmo)
+FROM ofincmos
+WHERE date = '2021-06-01'
+GROUP BY cusip, date ) AS y
+ON poolbodies.cusip = y.cusip
+INNER JOIN (
+SELECT * 
+FROM fedholdings
+WHERE fedholdings.asofdate = '2021-07-21' ) AS fed
+ON fed.cusip = poolbodies.cusip
+WHERE
+poolbodies.date = '2021-06-01'
+AND
+poolpredictions.date = '2021-07-01'
+AND
+poolfhavas.date = '2021-07-01'
+
+
