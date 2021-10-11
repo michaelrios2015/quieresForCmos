@@ -210,3 +210,22 @@ UPDATE platinumbodies
 SET indicator = NULL
 AND istbaelig = NULL
 WHERE platinumbodies.date = '2021-07-01';
+
+
+
+
+
+
+
+
+
+SELECT * 
+FROM 
+    platinums
+INNER JOIN
+    platinumbodies
+ON
+    platinums.cusip = platinumbodies.cusip
+WHERE type != 'SP'
+AND istbaelig IS FALSE
+LIMIT 10;

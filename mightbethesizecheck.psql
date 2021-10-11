@@ -119,6 +119,40 @@ AND platinumbodies.istbaelig IS TRUE
 
 -- WE get 2456 for August
 
+
+-- looks like G2 platinums don't match exactly with what i get when trying to find original face in G2 pools honestly not sure if they should but want to check
+
+SELECT * 
+FROM g2plats
+FULL JOIN plattstocheck
+ON g2plats.cusip = plattstocheck.platcusip
+WHERE g2plats.cusip IS NULL
+    OR plattstocheck IS NULL;
+LIMIT 2;
+
+--  theser are is TBA false 
+   cusip   |  name  | indicator | type | originalface | interestrate | remainingbalance |   factor   |    date    | platcusip
+-----------+--------+-----------+------+--------------+--------------+------------------+------------+------------+-----------
+           |        |           |      |              |              |                  |            |            | 36225AYS3
+           |        |           |      |              |              |                  |            |            | 3622A23J9
+           |        |           |      |              |              |                  |            |            | 3622A2AV4
+           |        |           |      |              |              |                  |            |            | 3622A2RQ7
+           |        |           |      |              |              |                  |            |            | 3622A3CL2
+           |        |           |      |              |              |                  |            |            | 3622AAGG3
+           |        |           |      |              |              |                  |            |            | 3622AAYQ1
+           |        |           |      |              |              |                  |            |            | 3622AAZD9
+           |        |           |      |              |              |                  |            |            | 36241LCC8
+           |        |           |      |              |              |                  |            |            | 36241LCQ7
+           |        |           |      |              |              |                  |            |            | 36241LH33
+           |        |           |      |              |              |                  |            |            | 36241LJZ0
+ 
+--  so these are three platinums at that probably don't have any direct pools what happens to the rest??
+ 
+ 3622A2A36 | 783626 | M         | SP   |     97516365 |            5 |       8560208.54 | 0.08778227 | 2021-08-01 |
+ 3622A3CZ1 | 784588 | M         | SP   |    121300240 |          5.5 |      53521408.92 | 0.44123085 | 2021-08-01 |
+ 3622ABCP5 | 785578 | M         | SP   |    101357736 |          3.5 |      96900592.63 | 0.95602562 | 2021-08-01 |
+
+
 -- Some of the ones with coupon 7
 cmos_builder=# SELECT * FROM g2pools where "interestRate" = 7;
    cusip   |  name  | indicator | type | originalface | interestRate | remainingBalance |   factor   |    date
@@ -150,25 +184,25 @@ WHERE platinumbodies.date = '2021-08-01';
 
 -- Just combining platinum info with platcolls to make life easier later, are we using this??  
 
-SELECT 
-    platcolls.cusip,
-    currplats.name AS platname,
-    currplats.originalface,
-    currplats.interestrate,
-    currplats.remainingbalance,
-    currplats.factor,
-    currplats.istbaelig,
-    currplats.date,
-    platcolls.poolname,
-    platcolls.indicator,
-    platcolls.faceinplatinum,
-    platcolls.active,
-    platcolls.born,
-    platcolls.terminated
-INTO TEMP TABLE platcollswithcurrplats
-FROM platcolls
-LEFT JOIN currplats
-ON platcolls.cusip = currplats.cusip;
+-- SELECT 
+--     platcolls.cusip,
+--     currplats.name AS platname,
+--     currplats.originalface,
+--     currplats.interestrate,
+--     currplats.remainingbalance,
+--     currplats.factor,
+--     currplats.istbaelig,
+--     currplats.date,
+--     platcolls.poolname,
+--     platcolls.indicator,
+--     platcolls.faceinplatinum,
+--     platcolls.active,
+--     platcolls.born,
+--     platcolls.terminated
+-- INTO TEMP TABLE platcollswithcurrplats
+-- FROM platcolls
+-- LEFT JOIN currplats
+-- ON platcolls.cusip = currplats.cusip;
 
 -- LIMIT 5;
 
@@ -222,7 +256,7 @@ SELECT
     originalface - ofinplat AS tradeableof,
     (originalface - ofinplat) * ("remainingBalance" / originalface) AS tradeablecf
 INTO TEMP TABLE g2poolstradeablecurrfaceinplats
-FROM g2poolsofinplats
+FROM g2poolsofinplats;
 -- INNER JOIN poolsforcurrfaceplat
 -- ON pooloriginalfaceinplats.poolcusip = poolsforcurrfaceplat.cusip
 -- WHERE platcollswithcurrplats.cusip IS NULL
@@ -242,7 +276,7 @@ SELECT
 INTO TEMP TABLE g2poolstradeablecf
 FROM g2poolstradeablecurrfaceinplats
 GROUP BY "interestRate"
-ORDER BY "interestRate"
+ORDER BY "interestRate";
 -- LIMIT 2;
 
 
@@ -403,6 +437,17 @@ FROM platcolls
 INNER JOIN plattstocheckwithinfo 
 ON platcolls.poolname = plattstocheckwithinfo.name 
 -- LIMIT 10;
+
+--------------------------------------- are plat to check two different than one
+SELECT 
+    *
+FROM plattstocheck
+RIGHT JOIN plattstochecktwo
+ON plattstochecktwo.cusip = plattstocheck.platcusip    
+-- WHERE plattstochecktwo.cusip IS NULL
+WHERE plattstocheck.platcusip IS NULL
+LIMIT 2
+;
 
 
 

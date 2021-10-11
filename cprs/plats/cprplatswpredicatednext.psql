@@ -1,4 +1,4 @@
---------------THIS SHOULD WORK 10/7/21
+-------------Was predicted  with a couple of changes should be prediction next
 
 -- SHould innclude something about what need to be loads 
 
@@ -123,7 +123,8 @@ FROM ofxfactorcpr
 GROUP BY
   platcusip;
 
--- current pools with cpr for month M + 1, will need in next steps 
+-- CHANGE TO PREDICTED NEXT
+-- current pools with predicted cpr for month M + 1, will need in next steps 
 
  SELECT
   currpoolscpr.cusip,
@@ -131,26 +132,26 @@ GROUP BY
   currpoolscpr.indicator,
   currpoolscpr.originalface,
   currpoolscpr."remainingBalance",
-  actualcprs.actualcpr
-INTO TEMP TABLE currpoolscprwactual  
+  poolpredictions."cprNext" AS predictedcprnext
+INTO TEMP TABLE currpoolscprwpredictednext  
 FROM
   currpoolscpr
 -- I guess it needs to be inner join becuase we need a cpr??
 -- this is where I had to deal with a null value I believe  
-INNER JOIN actualcprs ON currpoolscpr.cusip = actualcprs.cusip
-WHERE actualcprs.date = '2021-08-01';
+INNER JOIN poolpredictions ON  currpoolscpr.cusip = poolpredictions.cusip
+WHERE poolpredictions.date = '2021-08-01';
 
 
 ---------------------------------------------------------------------
 -- after first time uncomment from here and run 
-DROP TABLE platcpr, currplatswithcpr, almoststepthree, stepthree, stepfour;
+DROP TABLE platpredictedcprnext, currplatswithpredictedcprnext, almoststepthree, stepthree, stepfour;
 
 -- so the cprs are for month + 1
 
 SELECT 
   platinumbodies.cusip,
-  platinumbodies.cpr
-INTO TEMP TABLE platcpr
+  platinumbodies.predictedcprnext
+INTO TEMP TABLE platpredictedcprnext
 FROM  platinumbodies
 WHERE date = '2021-08-01';
 
@@ -162,29 +163,30 @@ SELECT
   currplatscpr.name,
   currplatscpr.originalface,
   currplatscpr.remainingbalance,
-  platcpr.cpr
-INTO TEMP TABLE currplatswithcpr
+  platpredictedcprnext.predictedcprnext
+INTO TEMP TABLE currplatswithpredictedcprnext
 FROM currplatscpr
-INNER JOIN platcpr ON currplatscpr.cusip = platcpr.cusip;
+INNER JOIN platpredictedcprnext ON currplatscpr.cusip = platpredictedcprnext.cusip;
 
-
+--------------------------------------------------------------------------------------------------------------------------
+-- Needs to be updated 
 -- step three without summing
 
 SELECT
   platcollsweneed.platcusip AS platinumcusip,
   platcollsweneed.poolname,
   platcollsweneed.indicator,
-  currpoolscprwactual.cusip as poolcusip,
+  currpoolscprwpredictednext.cusip as poolcusip,
   (
     platcollsweneed.faceinplatinum * (
-      currpoolscprwactual."remainingBalance" / currpoolscprwactual.originalface
+      currpoolscprwpredictednext."remainingBalance" / currpoolscprwpredictednext.originalface
     )
   ) / platcurrfacecpr.currface AS weightofpool,
-  currpoolscprwactual.actualcpr,
+  currpoolscprwpredictednext.predictedcprnext,
   (
     1 -(
       POWER(
-        (1 -(currpoolscprwactual.actualcpr)),
+        (1 -(currpoolscprwpredictednext.predictedcprnext)),
         (cast(1 as float) / cast(12 as float))
       )
     )
@@ -192,38 +194,38 @@ SELECT
   (
     (
       platcollsweneed.faceinplatinum * (
-        currpoolscprwactual."remainingBalance" / currpoolscprwactual.originalface
+        currpoolscprwpredictednext."remainingBalance" / currpoolscprwpredictednext.originalface
       )
     ) / platcurrfacecpr.currface
   ) * (
     1 -(
       POWER(
-        (1 -(currpoolscprwactual.actualcpr)),
+        (1 -(currpoolscprwpredictednext.predictedcprnext)),
         (cast(1 as float) / cast(12 as float))
       )
     )
   ) as weightxpoolssm,
-  currplatswithcpr.cusip as platcusip,
+  currplatswithpredictedcprnext.cusip as platcusip,
   (
-    platcollsweneed.faceinplatinum * (currplatswithcpr.remainingbalance / currplatswithcpr.originalface)
+    platcollsweneed.faceinplatinum * (currplatswithpredictedcprnext.remainingbalance / currplatswithpredictedcprnext.originalface)
   ) / platcurrfacecpr.currface AS weightofplat,
-  currplatswithcpr.cpr AS platcpr,
+  currplatswithpredictedcprnext.predictedcprnext AS platcpr,
   (
     1 -(
       POWER(
-        (1 -(currplatswithcpr.cpr)),
+        (1 -(currplatswithpredictedcprnext.predictedcprnext)),
         (cast(1 as float) / cast(12 as float))
       )
     )
   ) AS platsmm,
   (
     (
-      platcollsweneed.faceinplatinum * (currplatswithcpr.remainingbalance / currplatswithcpr.originalface)
+      platcollsweneed.faceinplatinum * (currplatswithpredictedcprnext.remainingbalance / currplatswithpredictedcprnext.originalface)
     ) / platcurrfacecpr.currface
   ) * (
     1 -(
       POWER(
-        (1 -(currplatswithcpr.cpr)),
+        (1 -(currplatswithpredictedcprnext.predictedcprnext)),
         (cast(1 as float) / cast(12 as float))
       )
     )
@@ -234,14 +236,14 @@ FROM
   platcollsweneed
 INNER JOIN platcurrfacecpr
   ON platcollsweneed.platcusip = platcurrfacecpr.platcusip
-LEFT JOIN currpoolscprwactual
-  ON platcollsweneed.poolname = currpoolscprwactual.name
-  AND platcollsweneed.indicator = currpoolscprwactual.indicator
-LEFT JOIN currplatswithcpr ON platcollsweneed.poolname = currplatswithcpr.name
+LEFT JOIN currpoolscprwpredictednext
+  ON platcollsweneed.poolname = currpoolscprwpredictednext.name
+  AND platcollsweneed.indicator = currpoolscprwpredictednext.indicator
+LEFT JOIN currplatswithpredictedcprnext ON platcollsweneed.poolname = currplatswithpredictedcprnext.name
 WHERE
 (
-  currpoolscprwactual.cusip IS NOT NULL
-  OR currplatswithcpr.cusip IS NOT NULL
+  currpoolscprwpredictednext.cusip IS NOT NULL
+  OR currplatswithpredictedcprnext.cusip IS NOT NULL
 )
 -- if it is zero it probably should not be there 
 AND platcurrfacecpr.currface > 0
@@ -272,7 +274,7 @@ GROUP BY
 --  just a temp table 
 SELECT 
   platinumcusip, 
-  (1 - POWER((1 - smm), 12)) AS cpr 
+  (1 - POWER((1 - smm), 12)) AS predictedcprnext 
 INTO TEMP TABLE stepfour  
 FROM stepthree;
 
@@ -283,14 +285,14 @@ SELECT COUNT(*)
 FROM stepfour
 INNER JOIN platinumbodies
 ON stepfour.platinumcusip = platinumbodies.cusip
-WHERE stepfour.cpr = platinumbodies.cpr
+WHERE stepfour.predictedcprnext = platinumbodies.predictedcprnext
 AND platinumbodies.date = '2021-08-01';
 
 
 --- This will update platinum bodies cprs now with m + 1
 
 UPDATE platinumbodies
-SET cpr = stepfour.cpr
+SET predictedcprnext = stepfour.predictedcprnext
 FROM stepfour
 WHERE stepfour.platinumcusip = platinumbodies.cusip
 AND platinumbodies.date = '2021-08-01';
@@ -303,7 +305,7 @@ AND platinumbodies.date = '2021-08-01';
 -- WHERE platinumbodies.date = '2021-07-01';
 
 
---------- some testing stuff
+--------- some testing stuff has not been changed to predictions
 select count(*)
 FROM platinumbodies
 WHERE cpr is NULL 
@@ -334,3 +336,13 @@ WHERE
 AND (
   platcolls.terminated > '2021-07-01' OR platcolls.terminated IS NULL );
 
+
+
+
+
+
+
+--------------ALTER TABLE 
+
+ALTER TABLE platinumbodies
+ADD predictedcprnext float;
