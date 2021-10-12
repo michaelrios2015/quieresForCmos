@@ -133,7 +133,7 @@ GROUP BY
   currpoolscdr.indicator,
   currpoolscdr.originalface,
   currpoolscdr."remainingBalance",
-  poolpredictions.cdr
+  poolpredictions."cdrNext" AS cdr
 INTO TEMP TABLE currpoolscdrwactual  
 FROM
   currpoolscdr
@@ -151,7 +151,7 @@ DROP TABLE platcdr, currplatswithcdr, almoststepthree, stepthree, stepfour;
 
 SELECT 
   platinumbodies.cusip,
-  platinumbodies.predictedcdr AS cdr
+  platinumbodies.predictedcdrnext AS cdr
 INTO TEMP TABLE platcdr
 FROM  platinumbodies
 WHERE date = '2021-08-01';
@@ -284,14 +284,14 @@ SELECT COUNT(*)
 FROM stepfour
 INNER JOIN platinumbodies
 ON stepfour.platinumcusip = platinumbodies.cusip
-WHERE stepfour.cdr = platinumbodies.predictedcdr
+WHERE stepfour.cdr = platinumbodies.predictedcdrnext
 AND platinumbodies.date = '2021-08-01';
 
 
 --- This will update platinum bodies cdrs now with m + 1
 
 UPDATE platinumbodies
-SET predictedcdr = stepfour.cdr
+SET predictedcdrnext = stepfour.cdr
 FROM stepfour
 WHERE stepfour.platinumcusip = platinumbodies.cusip
 AND platinumbodies.date = '2021-08-01';
@@ -325,4 +325,4 @@ LIMIT 10;
 --  Alter table 
 
 ALTER TABLE platinumbodies
-ADD predictedcdr double precision;
+ADD predictedcdrnext double precision;
