@@ -1,0 +1,328 @@
+-- The naming of the temp tables is not so great but it seems to work 10/11/21 
+
+-- SHould innclude something about what need to be loads 
+
+-- for this i think we just need pools, plats and platcolls all on the same page 
+
+-- The formula
+
+-- SMM = 1 - Power( 1 - CDR / 100, 1/12 ) - so even a minor error in cdr can cause major
+
+-- CDR = 1 - power( 1- SMM, 12 )
+
+-- Step 1 :   Current face of each platinum for month m (We are actually given this as remainingBalance)
+
+-- = sum   original face of pool i in the platinum * factor of pool i for month m
+
+-- Step 2 :   Weight of each pool i in platinum for the month m (we are given this too but calculating is a bit more accurate)
+
+-- = original face of pool i in the platinum * factor of pool i for month m  /  Current face of platinum for month m
+
+-- Step 3 :   SMM of platinum for month m+1
+
+-- = sum weight of each pool i for month m  * SMM of pool i for month m+1
+
+-- Step 4 : CDR of the platinum for month m+1
+
+-- Use SMM to CDR formula
+
+--- first time should be able to COPY and paste the whole thing run these
+
+-- we only have one actual cdr from july so we are trying it with our june ginnie mae data
+-- this first part is pretty much step 1 and two doing things to get the weight of eacg pool..
+
+-- what we need from pools
+
+SELECT
+    pools.cusip,
+    pools.name,
+    pools.indicator,
+    pools.originalface,
+    poolbodies."remainingBalance"
+INTO TEMP TABLE currpoolscdr 
+FROM
+    pools
+    INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
+WHERE
+    poolbodies.date = '2021-07-01';
+
+
+-- what we need from plats
+
+SELECT
+    platinums.cusip,
+    platinums.name,
+    platinums.originalface,
+    platinumbodies.remainingbalance
+INTO TEMP TABLE currplatscdr 
+FROM
+    platinums
+    INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
+WHERE
+    platinumbodies.date = '2021-07-01';
+
+-- what we need from platcolls
+
+SELECT
+    platcolls.cusip AS platcusip,
+    platcolls.poolname,
+    platcolls.indicator,
+    platcolls.faceinplatinum,
+    platcolls.born   
+INTO TEMP TABLE platcollsweneed 
+FROM
+    platcolls
+WHERE
+    -- does not matter is active or not just don't want future ones
+    platcolls.born <= '2021-07-01';
+
+-- LIMIT 2;
+
+
+-- combining the three to get current face of plats for month m 
+
+SELECT
+    platcollsweneed.platcusip,
+    platcollsweneed.poolname,
+    platcollsweneed.indicator,
+    platcollsweneed.faceinplatinum,
+    currpoolscdr.cusip as poolcusip,
+    currpoolscdr."remainingBalance" / currpoolscdr.originalface AS poolfactor,
+    platcollsweneed.faceinplatinum * (
+    currpoolscdr."remainingBalance" / currpoolscdr.originalface
+    ) AS ofxfactor,
+    currplatscdr.cusip  as platinplatcusip,
+    currplatscdr.remainingbalance / currplatscdr.originalface AS platfactor,
+    platcollsweneed.faceinplatinum * (
+    currplatscdr.remainingbalance / currplatscdr.originalface
+    ) AS ofplatxfactor
+INTO TEMP TABLE ofxfactorcdr
+-- so I should be able to make this it's own table limit by born date and be fine
+FROM
+    platcollsweneed
+LEFT JOIN currpoolscdr 
+ON platcollsweneed.poolname = currpoolscdr.name
+AND platcollsweneed.indicator = currpoolscdr.indicator
+LEFT JOIN currplatscdr ON platcollsweneed.poolname = currplatscdr.name
+WHERE
+    (
+    currpoolscdr.cusip IS NOT NULL
+    OR currplatscdr.cusip IS NOT NULL
+    );
+
+
+-- summing the originl face X factor
+
+SELECT
+  platcusip,
+  SUM(
+    COALESCE(ofxfactor, 0) + COALESCE(ofplatxfactor, 0)
+  ) / 100 AS currface
+INTO TEMP TABLE platcurrfacecdr
+FROM ofxfactorcdr
+-- WHERE platcusip = '36225A2E9'
+GROUP BY
+  platcusip;
+
+-- current pools with predeicated cdr , will need in next steps
+-- did not rename the table... should be OK not the best practcie but should be ok 
+
+ SELECT
+  currpoolscdr.cusip,
+  currpoolscdr.name,
+  currpoolscdr.indicator,
+  currpoolscdr.originalface,
+  currpoolscdr."remainingBalance",
+  poolpredictions.cdr
+INTO TEMP TABLE currpoolscdrwactual  
+FROM
+  currpoolscdr
+-- I guess it needs to be inner join becuase we need a cdr??
+-- this is where I had to deal with a null value I believe  
+INNER JOIN poolpredictions ON currpoolscdr.cusip = poolpredictions.cusip
+WHERE poolpredictions.date = '2021-08-01';
+
+
+---------------------------------------------------------------------
+-- after first time uncomment from here and run 
+DROP TABLE platcdr, currplatswithcdr, almoststepthree, stepthree, stepfour;
+
+-- so the cdrs are for month + 1
+
+SELECT 
+  platinumbodies.cusip,
+  platinumbodies.predictedcdr AS cdr
+INTO TEMP TABLE platcdr
+FROM  platinumbodies
+WHERE date = '2021-08-01';
+
+-- so plat info for month m and cdr for m+1 
+
+SELECT
+  currplatscdr.cusip,
+  currplatscdr.name,
+  currplatscdr.originalface,
+  currplatscdr.remainingbalance,
+  platcdr.cdr
+INTO TEMP TABLE currplatswithcdr
+FROM currplatscdr
+INNER JOIN platcdr ON currplatscdr.cusip = platcdr.cusip;
+
+
+-- step three without summing
+
+SELECT
+  platcollsweneed.platcusip AS platinumcusip,
+  platcollsweneed.poolname,
+  platcollsweneed.indicator,
+  currpoolscdrwactual.cusip as poolcusip,
+  (
+    platcollsweneed.faceinplatinum * (
+      currpoolscdrwactual."remainingBalance" / currpoolscdrwactual.originalface
+    )
+  ) / platcurrfacecdr.currface AS weightofpool,
+  currpoolscdrwactual.cdr,
+  (
+    1 -(
+      POWER(
+        (1 -(currpoolscdrwactual.cdr)),
+        (cast(1 as float) / cast(12 as float))
+      )
+    )
+  ) AS poolsmm,
+  (
+    (
+      platcollsweneed.faceinplatinum * (
+        currpoolscdrwactual."remainingBalance" / currpoolscdrwactual.originalface
+      )
+    ) / platcurrfacecdr.currface
+  ) * (
+    1 -(
+      POWER(
+        (1 -(currpoolscdrwactual.cdr)),
+        (cast(1 as float) / cast(12 as float))
+      )
+    )
+  ) as weightxpoolssm,
+  currplatswithcdr.cusip as platcusip,
+  (
+    platcollsweneed.faceinplatinum * (currplatswithcdr.remainingbalance / currplatswithcdr.originalface)
+  ) / platcurrfacecdr.currface AS weightofplat,
+  currplatswithcdr.cdr AS platcdr,
+  (
+    1 -(
+      POWER(
+        (1 -(currplatswithcdr.cdr)),
+        (cast(1 as float) / cast(12 as float))
+      )
+    )
+  ) AS platsmm,
+  (
+    (
+      platcollsweneed.faceinplatinum * (currplatswithcdr.remainingbalance / currplatswithcdr.originalface)
+    ) / platcurrfacecdr.currface
+  ) * (
+    1 -(
+      POWER(
+        (1 -(currplatswithcdr.cdr)),
+        (cast(1 as float) / cast(12 as float))
+      )
+    )
+  ) as weightxplatssm
+INTO TEMP TABLE almoststepthree
+-- would need to use same table here  
+FROM
+  platcollsweneed
+INNER JOIN platcurrfacecdr
+  ON platcollsweneed.platcusip = platcurrfacecdr.platcusip
+LEFT JOIN currpoolscdrwactual
+  ON platcollsweneed.poolname = currpoolscdrwactual.name
+  AND platcollsweneed.indicator = currpoolscdrwactual.indicator
+LEFT JOIN currplatswithcdr ON platcollsweneed.poolname = currplatswithcdr.name
+WHERE
+(
+  currpoolscdrwactual.cusip IS NOT NULL
+  OR currplatswithcdr.cusip IS NOT NULL
+)
+-- if it is zero it probably should not be there 
+AND platcurrfacecdr.currface > 0
+-- AND platcollsweneed.cusip = '36225A2E9'
+ORDER BY
+platcollsweneed.poolname;
+
+----------
+-- summing almost step three to get step three
+
+SELECT
+  almoststepthree.platinumcusip,
+  -- not sure why we divide by 100
+  SUM(
+    COALESCE(almoststepthree.weightxpoolssm, 0) + COALESCE(almoststepthree.weightxplatssm, 0)
+  ) / 100 AS smm
+INTO TEMP TABLE stepthree
+FROM almoststepthree
+GROUP BY
+  almoststepthree.platinumcusip;
+
+
+-- \COPY (SELECT cusip, cdr from platinumbodies where date = '2021-08-01') to 'C:\Users\micha\platcdr' csv header; 
+
+-- THIS IS All testing how to improve the while loop
+
+
+--  just a temp table 
+SELECT 
+  platinumcusip, 
+  (1 - POWER((1 - smm), 12)) AS cdr 
+INTO TEMP TABLE stepfour  
+FROM stepthree;
+
+
+---------- so I can use this to see if the tables are equal then run the above to update then rerun the query
+
+SELECT COUNT(*) 
+FROM stepfour
+INNER JOIN platinumbodies
+ON stepfour.platinumcusip = platinumbodies.cusip
+WHERE stepfour.cdr = platinumbodies.predictedcdr
+AND platinumbodies.date = '2021-08-01';
+
+
+--- This will update platinum bodies cdrs now with m + 1
+
+UPDATE platinumbodies
+SET predictedcdr = stepfour.cdr
+FROM stepfour
+WHERE stepfour.platinumcusip = platinumbodies.cusip
+AND platinumbodies.date = '2021-08-01';
+
+
+
+--- this can erease all the cdrs
+-- UPDATE platinumbodies
+-- SET cdr = NULL
+-- WHERE platinumbodies.date = '2021-07-01';
+
+
+--------- some testing stuff
+select count(*)
+FROM platinumbodies
+WHERE cdr is NULL 
+AND date = '2021-07-01'
+
+select *
+FROM platinumbodies 
+INNER JOIN platinumbodies AS x
+ON platinumbodies.cusip = x.cusip
+WHERE platinumbodies.cdr = x.cdr 
+AND platinumbodies.date = '2021-06-01'
+AND x.date = '2021-07-01'
+LIMIT 10;
+
+
+--------------
+
+--  Alter table 
+
+ALTER TABLE platinumbodies
+ADD predictedcdr double precision;
