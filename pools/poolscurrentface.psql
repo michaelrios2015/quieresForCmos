@@ -34,8 +34,8 @@ WHERE poolbodies.date = '2021-08-01'
 AND pools.indicator = 'M'
 -- AND pools.indicator = 'X'
 AND pools.type = 'SF'
-AND pools.istbaelig IS TRUE
-LIMIT 10;
+AND pools.istbaelig IS TRUE;
+-- LIMIT 10;
 
 
 -- will need actual cprs not sure if this is the best way to get it...

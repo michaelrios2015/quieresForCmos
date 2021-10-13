@@ -44,7 +44,7 @@ WHERE platinumbodies.date = '2021-08-01'
 AND platinumbodies.indicator = 'M'
 -- AND platinumbodies.indicator = 'X'
 AND platinums.type = 'SP'
-AND platinumbodies.istbaelig IS TRUE
+AND platinumbodies.istbaelig IS TRUE;
 -- LIMIT 3;
 
 
@@ -93,7 +93,7 @@ FROM platcolls
 WHERE born <= '2021-08-01'
 -- LIMIT 4;
 GROUP BY
-    poolname
+    poolname;
     
 -- adding original face in cmos 
 
@@ -172,7 +172,7 @@ FROM
   LEFT JOIN ofinplatinum 
     ON platscurr.name = ofinplatinum.poolname
   LEFT JOIN ofpoolincmo ON platscurr.cusip = ofpoolincmo.cusip 
-  LEFT JOIN fedholdingscurr ON platscurr.cusip = fedholdingscurr.cusip  
+  LEFT JOIN fedholdingscurr ON platscurr.cusip = fedholdingscurr.cusip;  
 --   WHERE poolscurr.cusip = '36202DVX6'  
 -- WHERE fedholdingscurr.currentfacevalue IS NOT NULL
 -- LIMIT
