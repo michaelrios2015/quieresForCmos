@@ -1,0 +1,267 @@
+-- copied from g2 on 10/17 just going to modify it slightly I am sure there is a way to use variable
+
+-- seems to
+
+-- This is what I used to get the pool data should be able to get platinum data with a bit of modification
+-- it was working for pools on 10/10/21
+
+-- TEMP TABLES 
+
+--- SO I SHOULD BE ABLE To update the dates add the temp tables and run my query, yes!!! 
+-- combining platinum and platinumbodies getting what I need from both
+-- this is month M
+-- So we want two reports one for pools with Type = "SP' and Indicator = 'M" G2
+-- and one with Type = "SP' and Indicator = 'X" G1
+
+
+-- ONLY TBA Elig ones 
+
+SELECT   
+    platinums.cusip,
+    platinums.name,
+    platinumbodies.indicator,
+    platinums.type,
+    platinums.issuedate,
+    platinums.originalface,
+    platinumbodies.remainingbalance,
+    -- calculating the factor on our own
+    platinumbodies.remainingbalance / platinums.originalface AS factor, 
+    platinumbodies.interestrate,
+    platinumbodies.gwac,
+    platinumbodies.wam,
+    platinumbodies.wala,
+    platinumbodies.cpr,
+    platinumbodies.predictedcpr,
+    platinumbodies.predictedcprnext,
+    platinumbodies.cdr,
+    platinumbodies.predictedcdr,
+    platinumbodies.predictedcdrnext,
+    platinumbodies.istbaelig,
+    platinumbodies.date
+INTO TEMP TABLE platscurr 
+FROM platinums 
+INNER JOIN platinumbodies
+ON platinums.cusip = platinumbodies.cusip 
+WHERE platinumbodies.date = '2021-08-01'
+-- AND platinumbodies.indicator = 'M'
+AND platinumbodies.indicator = 'X'
+AND platinums.type = 'SP'
+AND platinumbodies.istbaelig IS TRUE;
+-- LIMIT 3;
+
+
+-- will need actual cprs not sure if this is the best way to get it...
+
+SELECT *
+INTO TEMP TABLE pastactualcpr
+FROM platinumbodies
+WHERE platinumbodies.date = '2021-07-01';
+
+
+-- will need actual cdrs not sure if this is the best way to get it...
+
+SELECT *
+INTO TEMP TABLE pastactualcdr
+FROM platinumbodies
+WHERE platinumbodies.date = '2021-07-01';
+-- LIMIT 1;
+
+
+-- Does this apply to platinums?? not sure
+-- ditto for poolfhavas
+-- I think I just use month M
+
+SELECT *
+INTO TEMP TABLE poolfhavascurr
+FROM poolfhavas
+WHERE poolfhavas.date = '2021-08-01';
+
+
+-- SELECT * FROM pools INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip LIMIT 2; 
+
+-- the temp table that sums up original face in platinum them and groups them by poolname (with platinums we 
+-- only use poolname as we made our own indicator)
+-- which we will use to join to our plat table, so this is fine but need a date thing does it matter if it is 
+--active or not.. going to assumme it does not
+
+-- I think this is measured in pennies
+
+SELECT 
+    count(*),
+    poolname,
+    SUM(faceinplatinum) as ofinplat
+INTO TEMP TABLE ofinplatinum 
+FROM platcolls
+WHERE born <= '2021-08-01'
+-- LIMIT 4;
+GROUP BY
+    poolname;
+    
+-- adding original face in cmos 
+
+-- TEMP TABLE 
+-- not really sure how date is being used..... allmost all cmos has not been updated since june..
+---NEEDS TO BE CHANGED
+
+
+SELECT
+    cusip,
+    -- date,
+    -- COUNT (*),
+    SUM(faceincmo) AS ofincmo
+INTO TEMP TABLE ofpoolincmo
+FROM
+    uniqueofincmos
+WHERE date <= '2021-08-01'
+AND ( collapsed > '2021-08-01' OR collapsed IS NULL) 
+GROUP BY
+    cusip;
+--     date
+-- ORDER BY date DESC
+-- LIMIT 2;
+
+----now to add feds and we are good, the fed uses current face so we can just keep it like that 
+-- Switched back to june...
+
+--temp table, fed holdings has only one per pool?? I guess so 
+-- SO Month M + 1.5
+
+SELECT * 
+INTO TEMP TABLE fedholdingscurr
+FROM fedholdings
+WHERE fedholdings.asofdate = '2021-09-22';
+
+
+  
+-- joining it to other stuff 
+--this just needs to be turned into a copy statement and I need to check on which data we want 
+-- Actual CDR should be added might hav it not sure 
+-- I think this works 10/11/21
+
+SELECT
+  platscurr.cusip,
+  platscurr.name,
+  platscurr.indicator,
+  platscurr.type,
+  platscurr.issuedate,
+  platscurr.remainingbalance AS currface,
+  --   platscurr.factor,
+  --   ofpoolincmo.ofincmo,
+  ofpoolincmo.ofincmo * platscurr.factor AS cfincmo,
+  fedholdingscurr.currentfacevalue AS cfinfed,
+  --   ofinplatinum.ofinplat,
+  (ofinplatinum.ofinplat/100) * platscurr.factor AS cfinplat,
+  platscurr.interestrate as coupon,
+  platscurr.gwac, 
+  platscurr.wala,
+  platscurr.wam,
+  poolfhavascurr.va,
+  pastactualcpr.cpr AS pastactcpr,
+  platscurr.cpr,
+  platscurr.predictedcpr AS cprprediction,
+  platscurr.predictedcprnext AS cprpredictionnext,
+  pastactualcdr.cdr AS pastactcdr,
+  platscurr.cdr,
+  platscurr.predictedcdr AS cdrprediction,
+  platscurr.predictedcdrnext AS cdrpredictionnext,
+  platscurr.date
+INTO TEMP TABLE platdataforweb
+FROM
+  platscurr
+  LEFT JOIN pastactualcpr ON (platscurr.cusip = pastactualcpr.cusip)
+  LEFT JOIN pastactualcdr ON (platscurr.cusip = pastactualcdr.cusip)
+  LEFT JOIN poolfhavascurr ON (platscurr.cusip = poolfhavascurr.cusip)
+  LEFT JOIN ofinplatinum 
+    ON platscurr.name = ofinplatinum.poolname
+  LEFT JOIN ofpoolincmo ON platscurr.cusip = ofpoolincmo.cusip 
+  LEFT JOIN fedholdingscurr ON platscurr.cusip = fedholdingscurr.cusip;  
+--   WHERE poolscurr.cusip = '36202DVX6'  
+-- WHERE fedholdingscurr.currentfacevalue IS NOT NULL
+-- LIMIT
+--   10;
+
+
+-- this gets all the pools, eventually will want to limit it to pools with float 
+
+-- \COPY (SELECT * FROM pooldataforweb) to 'C:\Users\micha\pooldataforweb' csv header;
+
+---------pools with negative current face 
+
+SELECT cusip,
+currface - cfincmo - cfinfed - cfinplat AS minus,
+currface,
+cfincmo,
+cfinfed,
+cfinplat
+FROM pooldataforweb
+WHERE currface - cfincmo - cfinfed - cfinplat < 0
+-- WHERE cusip = '36176ADT3'
+ORDER BY currface - cfincmo - cfinfed - cfinplat ASC
+LIMIT 10;
+
+-- \COPY (SELECT cusip, currface - cfincmo - cfinfed - cfinplat AS minus, currface, cfincmo, cfinfed, cfinplat FROM pooldataforweb WHERE currface - cfincmo - cfinfed - cfinplat < 0 ORDER BY currface - cfincmo - cfinfed - cfinplat DESC) to 'C:\Users\micha\poolswithnegativecf' csv header;
+
+
+SELECT *
+INTO TEMP TABLE g1platswithcurrfloat
+FROM platdataforweb
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1;
+
+\COPY (SELECT * FROM g1platswithcurrfloat) to 'C:\Users\micha\g1platswithcurrfloat' csv header;
+
+---------pools with current face above zero 
+
+SELECT cusip,
+currface - cfincmo - cfinfed - cfinplat AS float,
+currface,
+cfincmo,
+cfinfed,
+cfinplat
+FROM pooldataforweb
+WHERE currface - cfincmo - cfinfed - cfinplat > 0
+ORDER BY currface - cfincmo - cfinfed - cfinplat DESC
+LIMIT 10;
+
+
+SELECT 
+  *
+-- currface - cfincmo - cfinfed - cfinplat AS float
+-- currface,
+-- cfincmo,
+-- cfinfed,
+-- cfinplat
+FROM pooldataforweb
+-- WHERE currface - cfincmo - cfinfed - cfinplat <= 1
+ORDER BY currface - cfincmo - cfinfed - cfinplat DESC
+LIMIT 1;
+
+
+-- just counting the ones that still have float 
+SELECT COUNT (*)
+FROM pooldataforweb
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1;
+
+-- counting the ones that have negative float this should not happen 
+SELECT COUNT(*)
+FROM pooldataforweb
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1
+LIMIT 10;
+
+SELECT *,
+  currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float
+FROM pooldataforweb
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1
+ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC
+LIMIT 100;
+
+-- for G2
+-- \COPY (SELECT *, currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float FROM pooldataforweb WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC) to 'C:\Users\micha\G2poolswithnegativecf' csv header;
+
+
+-- for G1
+\COPY (SELECT *, currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float FROM pooldataforweb WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC) to 'C:\Users\micha\G1poolswithnegativecf' csv header;
+
+
+SELECT COUNT (*)
+FROM pooldataforweb
+WHERE currface IS NULL
