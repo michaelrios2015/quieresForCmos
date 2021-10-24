@@ -46,7 +46,7 @@ FROM
     pools
     INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
 WHERE
-    poolbodies.date = '2021-07-01';
+    poolbodies.date = '2021-08-01';
 
 
 -- what we need from plats
@@ -61,7 +61,7 @@ FROM
     platinums
     INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
 WHERE
-    platinumbodies.date = '2021-07-01';
+    platinumbodies.date = '2021-08-01';
 
 -- what we need from platcolls from month M
 
@@ -75,7 +75,7 @@ INTO TEMP TABLE platcollsweneed
 FROM
   platcolls
 WHERE
-  platcolls.born <= '2021-07-01';
+  platcolls.born <= '2021-08-01';
 
 -- LIMIT 2;
 
@@ -141,7 +141,7 @@ FROM
 -- I guess it needs to be inner join becuase we need a cpr??
 -- this is where I had to deal with a null value I believe  
 INNER JOIN poolpredictions ON  currpoolscpr.cusip = poolpredictions.cusip
-WHERE poolpredictions.date = '2021-08-01';
+WHERE poolpredictions.date = '2021-09-01';
 
 
 ---------------------------------------------------------------------
@@ -155,7 +155,7 @@ SELECT
   platinumbodies.predictedcpr
 INTO TEMP TABLE platpredictedcpr
 FROM  platinumbodies
-WHERE date = '2021-08-01';
+WHERE date = '2021-09-01';
 
 -- so plat info for month m and cpr for m+1 
 -- ok all good so far
@@ -268,7 +268,7 @@ GROUP BY
   almoststepthree.platinumcusip;
 
 
--- \COPY (SELECT cusip, cpr from platinumbodies where date = '2021-08-01') to 'C:\Users\micha\platcpr' csv header; 
+-- \COPY (SELECT cusip, cpr from platinumbodies where date = '2021-09-01') to 'C:\Users\micha\platcpr' csv header; 
 
 -- THIS IS All testing how to improve the while loop
 
@@ -288,7 +288,7 @@ FROM stepfour
 INNER JOIN platinumbodies
 ON stepfour.platinumcusip = platinumbodies.cusip
 WHERE stepfour.predictedcpr = platinumbodies.predictedcpr
-AND platinumbodies.date = '2021-08-01';
+AND platinumbodies.date = '2021-09-01';
 
 
 --- This will update platinum bodies cprs now with m + 1
@@ -297,21 +297,21 @@ UPDATE platinumbodies
 SET predictedcpr = stepfour.predictedcpr
 FROM stepfour
 WHERE stepfour.platinumcusip = platinumbodies.cusip
-AND platinumbodies.date = '2021-08-01';
+AND platinumbodies.date = '2021-09-01';
 
 
 
 --- this can erease all the cprs
 -- UPDATE platinumbodies
 -- SET cpr = NULL
--- WHERE platinumbodies.date = '2021-07-01';
+-- WHERE platinumbodies.date = '2021-08-01';
 
 
---------- some testing stuff has not been changed to predictions
+--------- some testing stuff has not been changed to predictions dates are probably all whacky too
 select count(*)
 FROM platinumbodies
 WHERE cpr is NULL 
-AND date = '2021-07-01'
+AND date = '2021-08-01'
 
 select *
 FROM platinumbodies 
@@ -319,7 +319,7 @@ INNER JOIN platinumbodies AS x
 ON platinumbodies.cusip = x.cusip
 WHERE platinumbodies.cpr = x.cpr 
 AND platinumbodies.date = '2021-06-01'
-AND x.date = '2021-07-01'
+AND x.date = '2021-08-01'
 LIMIT 10;
 
 
@@ -334,6 +334,6 @@ INTO TEMP TABLE platcollsweneedtest
 FROM
   platcolls
 WHERE
-  platcolls.born <= '2021-07-01'
+  platcolls.born <= '2021-08-01'
 AND (
-  platcolls.terminated > '2021-07-01' OR platcolls.terminated IS NULL );
+  platcolls.terminated > '2021-08-01' OR platcolls.terminated IS NULL );
