@@ -11,7 +11,7 @@ HAVING COUNT(*) > 1) AS x
 LIMIT 2;
 
 
--- so this seems fine just got to put it in a real table and the date is probably going to be changed
+-- so this seems fine just got to put it in a real table just summing all of them but only using a month at a time 
 SELECT cmo, cusip, date, sum(faceincmo) AS ofincmo
 INTO TEMP TABLE tempuniqueofincmos
 FROM ofincmos
@@ -23,7 +23,7 @@ GROUP BY cmo, cusip, date;
 INSERT INTO uniqueofincmos (cmo, cusip, date, faceincmo)
 SELECT cmo, cusip, date, ofincmo
 FROM tempuniqueofincmos
-WHERE tempuniqueofincmos.date = '2021-08-01';
+WHERE tempuniqueofincmos.date = '2021-09-01';
 
 
 ---------- attempts at updating cmo dates 

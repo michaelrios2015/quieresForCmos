@@ -1,3 +1,5 @@
+-- DONE FOR SEPTEMBER 10/24/21
+
 -- I THINK THIS IS THE LATEST 10/10/21
 
 -- TEMP TABLES 
@@ -30,7 +32,7 @@ INTO TEMP TABLE poolscurr
 FROM pools 
 INNER JOIN poolbodies
 ON pools.cusip = poolbodies.cusip 
-WHERE poolbodies.date = '2021-08-01'
+WHERE poolbodies.date = '2021-09-01'
 AND pools.indicator = 'M'
 -- AND pools.indicator = 'X'
 AND pools.type = 'SF'
@@ -42,26 +44,26 @@ AND pools.istbaelig IS TRUE;
 SELECT *
 INTO TEMP TABLE currentactualcpr
 FROM actualcprs
-WHERE actualcprs.date = '2021-08-01';
+WHERE actualcprs.date = '2021-09-01';
 -- LIMIT 1;
 
 SELECT *
 INTO TEMP TABLE pastactualcpr
 FROM actualcprs
-WHERE actualcprs.date = '2021-07-01';
+WHERE actualcprs.date = '2021-08-01';
 
 
 -- will need actual cdrs not sure if this is the best way to get it...
 SELECT *
 INTO TEMP TABLE currentactualcdr
 FROM actualcdrs
-WHERE actualcdrs.date = '2021-08-01';
+WHERE actualcdrs.date = '2021-09-01';
 -- LIMIT 1;
 
 SELECT *
 INTO TEMP TABLE pastactualcdr
 FROM actualcdrs
-WHERE actualcdrs.date = '2021-07-01';
+WHERE actualcdrs.date = '2021-08-01';
 -- LIMIT 1;
 
 -- Adding pool predictions we will use cpr, cprnext, cdr and cdrnext this will be the month M and M+1
@@ -69,7 +71,7 @@ WHERE actualcdrs.date = '2021-07-01';
 SELECT *
 INTO TEMP TABLE poolpredictionscurr
 FROM poolpredictions
-WHERE poolpredictions.date = '2021-08-01';
+WHERE poolpredictions.date = '2021-09-01';
 
 -- ditto for poolfhavas
 -- I think I just use month M
@@ -77,7 +79,7 @@ WHERE poolpredictions.date = '2021-08-01';
 SELECT *
 INTO TEMP TABLE poolfhavascurr
 FROM poolfhavas
-WHERE poolfhavas.date = '2021-08-01';
+WHERE poolfhavas.date = '2021-09-01';
 
 
 -- SELECT * FROM pools INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip LIMIT 2; 
@@ -95,7 +97,7 @@ SELECT
     SUM(faceinplatinum) as ofinplat
 INTO TEMP TABLE ofinplatinum 
 FROM platcolls
-WHERE born <= '2021-08-01'
+WHERE born <= '2021-09-01'
 -- LIMIT 4;
 GROUP BY
     poolname,
@@ -121,6 +123,7 @@ GROUP BY
 --     cusip,
 --     date;
 
+-- So CMOS is month M-1 thought month M seens to be ok too
 
 SELECT
     cusip,
@@ -147,7 +150,7 @@ GROUP BY
 SELECT * 
 INTO TEMP TABLE fedholdingscurr
 FROM fedholdings
-WHERE fedholdings.asofdate = '2021-09-22';
+WHERE fedholdings.asofdate = '2021-10-20';
 
 
   
@@ -215,7 +218,7 @@ cfincmo,
 cfinfed,
 cfinplat
 FROM pooldataforweb
-WHERE currface - cfincmo - cfinfed - cfinplat < 0
+WHERE currface - cfincmo - cfinfed - cfinplat < -1
 -- WHERE cusip = '36176ADT3'
 ORDER BY currface - cfincmo - cfinfed - cfinplat ASC
 LIMIT 10;
