@@ -1,0 +1,281 @@
+-- So copied this from the current face should mostly be the same expect I just need float and cpr
+
+-- DONE FOR SEPTEMBER 10/24/21
+
+-- I THINK THIS IS THE LATEST 10/10/21
+
+-- TEMP TABLES 
+
+--- SO I SHOULD BE ABLE To update the dates add the temp tables and run my query, yes!!! 
+-- combining pool and poolbodies getting what I need from both
+-- this is month M
+-- So we want two reports one for pools with Type = "SF' and Indicator = 'M" G2
+-- and one with Type = "SF' and Indicator = 'X" G1
+
+-- ONLY WANT TBA ELIG ONES
+
+SELECT   
+    pools.cusip,
+    pools.name,
+    pools.indicator,
+    pools.type,
+    pools.issuedate,
+    pools.originalface,
+    pools.istbaelig,
+    poolbodies."remainingBalance",
+    -- calculating the factor on our own
+    poolbodies."remainingBalance" / pools.originalface AS factor, 
+    poolbodies.date
+INTO TEMP TABLE poolscurr 
+FROM pools 
+INNER JOIN poolbodies
+ON pools.cusip = poolbodies.cusip 
+WHERE poolbodies.date = '2021-09-01'
+AND pools.indicator = 'M'
+-- AND pools.indicator = 'X'
+AND pools.type = 'SF'
+AND pools.istbaelig IS TRUE;
+-- LIMIT 10;
+
+
+-- will need actual cprs not sure if this is the best way to get it...
+SELECT *
+INTO TEMP TABLE currentactualcpr
+FROM actualcprs
+WHERE actualcprs.date = '2021-09-01';
+-- LIMIT 1;
+
+
+-- Adding pool predictions we will use cpr, cprnext, cdr and cdrnext this will be the month M and M+1
+
+SELECT *
+INTO TEMP TABLE poolpredictionscurr
+FROM poolpredictions
+WHERE poolpredictions.date = '2021-09-01';
+
+
+-- SELECT * FROM pools INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip LIMIT 2; 
+
+-- the temp table that sums up original face in platinum them and groups them by poolname and indicator
+-- which we will use to join to our pool table, so this is fine but need a date thing does it matter if it is 
+--active or not.. going to assumme it does not
+
+-- I think this is measured in pennies
+
+SELECT 
+    count(*),
+    poolname,
+    indicator,
+    SUM(faceinplatinum) as ofinplat
+INTO TEMP TABLE ofinplatinum 
+FROM platcolls
+WHERE born <= '2021-09-01'
+-- LIMIT 4;
+GROUP BY
+    poolname,
+    indicator;
+
+-- adding original face in cmos 
+
+-- TEMP TABLE 
+-- not really sure how date is being used..... allmost all cmos has not been updated since june..
+---NEEDS TO BE CHANGED
+
+--old way
+
+-- SELECT
+--     cusip,
+--     date,
+--     COUNT (*),
+--     SUM(faceincmo) AS ofincmo
+-- INTO TEMP TABLE ofpoolincmo
+-- FROM
+--     ofincmos
+-- GROUP BY
+--     cusip,
+--     date;
+
+-- So CMOS is month M-1 thought month M seens to be ok too
+
+SELECT
+    cusip,
+    -- date,
+    -- COUNT (*),
+    SUM(faceincmo) AS ofincmo
+INTO TEMP TABLE ofpoolincmo
+FROM
+    uniqueofincmos
+WHERE date <= '2021-08-01'
+AND ( collapsed > '2021-08-01' OR collapsed IS NULL) 
+GROUP BY
+    cusip;
+--     date
+-- ORDER BY date DESC
+-- LIMIT 2;
+
+----now to add feds and we are good, the fed uses current face so we can just keep it like that 
+-- Switched back to june...
+
+--temp table, fed holdings has only one per pool?? I guess so 
+-- SO Month M + 1.5
+
+SELECT * 
+INTO TEMP TABLE fedholdingscurr
+FROM fedholdings
+WHERE fedholdings.asofdate = '2021-10-20';
+
+
+  
+-- joining it to other stuff 
+--this just needs to be turned into a copy statement and I need to check on which data we want 
+-- Actual CDR should be added might hav it not sure 
+
+SELECT
+  poolscurr.cusip,
+  poolscurr.name,
+  poolscurr.indicator,
+  poolscurr.type,
+  poolscurr.issuedate,
+  poolscurr."remainingBalance" AS currface,
+  --   poolscurr.factor,
+  --   ofpoolincmo.ofincmo,
+  ofpoolincmo.ofincmo * poolscurr.factor AS cfincmo,
+  fedholdingscurr.currentfacevalue AS cfinfed,
+  --   ofinplatinum.ofinplat,
+  (ofinplatinum.ofinplat/100) * poolscurr.factor AS cfinplat,
+  currentactualcpr.actualcpr AS curractualcpr,
+  poolpredictionscurr.cpr AS cprprediction,
+  poolscurr.date
+INTO TEMP TABLE pooldataforweb
+FROM
+  poolscurr
+  LEFT JOIN currentactualcpr ON (poolscurr.cusip = currentactualcpr.cusip)
+  LEFT JOIN poolpredictionscurr ON (poolscurr.cusip = poolpredictionscurr.cusip)
+  LEFT JOIN ofinplatinum 
+    ON poolscurr.name = ofinplatinum.poolname
+    AND poolscurr.indicator = ofinplatinum.indicator
+  LEFT JOIN ofpoolincmo ON poolscurr.cusip = ofpoolincmo.cusip 
+  LEFT JOIN fedholdingscurr ON poolscurr.cusip = fedholdingscurr.cusip;  
+--   WHERE poolscurr.cusip = '36202DVX6'  
+-- WHERE fedholdingscurr.currentfacevalue IS NOT NULL
+-- LIMIT
+  -- 10;
+
+
+-- this gets all the pools, eventually will want to limit it to pools with float 
+
+-- \COPY (SELECT * FROM pooldataforweb) to 'C:\Users\micha\pooldataforweb' csv header;
+
+---------pools with negative current face 
+
+SELECT cusip,
+currface - cfincmo - cfinfed - cfinplat AS minus,
+currface,
+cfincmo,
+cfinfed,
+cfinplat
+FROM pooldataforweb
+WHERE currface - cfincmo - cfinfed - cfinplat < -1
+-- WHERE cusip = '36176ADT3'
+ORDER BY currface - cfincmo - cfinfed - cfinplat ASC
+LIMIT 10;
+
+-- negative float hopefuly from a collapsed cmo 
+
+--    cusip   |       minus        |  currface   |      cfincmo       |  cfinfed   |     cfinplat
+-- -----------+--------------------+-------------+--------------------+------------+-------------------
+--  36202FQ58 | -4355365.219694724 | 15562036.03 | 13918447.143015096 | 5992086.19 | 6867.916679626912
+
+-- \COPY (SELECT cusip, currface - cfincmo - cfinfed - cfinplat AS minus, currface, cfincmo, cfinfed, cfinplat FROM pooldataforweb WHERE currface - cfincmo - cfinfed - cfinplat < 0 ORDER BY currface - cfincmo - cfinfed - cfinplat DESC) to 'C:\Users\micha\poolswithnegativecf' csv header;
+
+-- cmos_builder=# SELECT * FROM uniqueofincmos where cusip = '36202FQ58';
+--     cmo     |   cusip   | faceincmo |    date    | collapsed
+-- ------------+-----------+-----------+------------+-----------
+--  2012-010-2 | 36202FQ58 |    630084 | 2012-01-01 |
+--  2012-012-4 | 36202FQ58 |     17472 | 2012-01-01 |
+--  2012-017-2 | 36202FQ58 |    426559 | 2012-01-01 |
+--  2011-122-4 | 36202FQ58 |  40580514 | 2011-01-01 |
+--  2011-056-8 | 36202FQ58 |  59567897 | 2011-01-01 |
+--  2012-037-T | 36202FQ58 |     19503 | 2012-01-01 |
+--  2011-080-2 | 36202FQ58 |     87441 | 2011-01-01 |
+
+
+SELECT 
+    curractualcpr,
+    cprprediction,
+    COALESCE(currface, 0) - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float
+INTO TEMP TABLE g2poolswithcurrfloat
+FROM pooldataforweb
+WHERE COALESCE(currface, 0) - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1;
+
+-- \COPY (SELECT * FROM g2poolswithcurrfloat) to 'C:\Users\micha\g2poolswithcurrfloat' csv header;
+
+
+SELECT 
+    curractualcpr,
+    SUM(COALESCE(float, 0))
+FROM g2poolswithcurrfloat
+WHERE curractualcpr > .7
+GROUP BY curractualcpr
+ORDER BY curractualcpr
+;
+
+SELECT * FROM g2poolswithcurrfloat WHERE float is null;
+
+
+---------pools with current face above zero 
+
+SELECT cusip,
+currface - cfincmo - cfinfed - cfinplat AS float,
+currface,
+cfincmo,
+cfinfed,
+cfinplat
+FROM pooldataforweb
+WHERE currface - cfincmo - cfinfed - cfinplat > 0
+ORDER BY currface - cfincmo - cfinfed - cfinplat DESC
+LIMIT 10;
+
+
+SELECT 
+  *
+-- currface - cfincmo - cfinfed - cfinplat AS float
+-- currface,
+-- cfincmo,
+-- cfinfed,
+-- cfinplat
+FROM pooldataforweb
+-- WHERE currface - cfincmo - cfinfed - cfinplat <= 1
+ORDER BY currface - cfincmo - cfinfed - cfinplat DESC
+LIMIT 1;
+
+
+-- just counting the ones that still have float 
+SELECT COUNT (*)
+FROM pooldataforweb
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1;
+
+-- counting the ones that have negative float this should not happen 
+SELECT COUNT(*)
+FROM pooldataforweb
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1
+LIMIT 10;
+
+SELECT *,
+  currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float
+FROM pooldataforweb
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1
+ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC
+LIMIT 100;
+
+-- for G2
+-- \COPY (SELECT *, currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float FROM pooldataforweb WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC) to 'C:\Users\micha\G2poolswithnegativecf' csv header;
+
+
+-- for G1
+\COPY (SELECT *, currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float FROM pooldataforweb WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC) to 'C:\Users\micha\G1poolswithnegativecf' csv header;
+
+
+SELECT COUNT (*)
+FROM pooldataforweb
+WHERE currface IS NULL
