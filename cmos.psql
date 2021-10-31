@@ -187,6 +187,9 @@ ADD collapsed date;
 2013-049-1
 
 
+--  this should work fine but since the date is made up should probably
+-- change it to TRUE or FALSE
+
 UPDATE uniqueofincmos
 SET collapsed = '2006-01-01' 
 WHERE cmo = '2012-129-1';
@@ -207,3 +210,86 @@ WHERE cmo = '2013-049-4';
 UPDATE uniqueofincmos
 SET collapsed = '2006-01-01' 
 WHERE cmo = '2013-049-1';
+
+-----------------------------
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2004-017-7';
+
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2009-122-11';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2009-122-12';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2009-122-13';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2011-122-4';
+
+--------------------------------
+ 
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2002-042-2';
+ 
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2002-042-3';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2002-051-2';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2002-054-2';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2002-055-1';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2002-060-1';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2002-060-3';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2002-060-6';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2002-065-3';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2002-067-3';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2002-078-1';
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2002-093-1';  
+   
+   
+   
+   
+   
+   
+   
+   
+   
+    

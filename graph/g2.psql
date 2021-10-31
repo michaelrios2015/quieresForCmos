@@ -23,6 +23,7 @@ SELECT
     pools.originalface,
     pools.istbaelig,
     poolbodies."remainingBalance",
+    poolbodies."interestRate",
     -- calculating the factor on our own
     poolbodies."remainingBalance" / pools.originalface AS factor, 
     poolbodies.date
@@ -46,20 +47,13 @@ WHERE actualcprs.date = '2021-09-01';
 -- LIMIT 1;
 
 
--- Adding pool predictions we will use cpr, cprnext, cdr and cdrnext this will be the month M and M+1
-
+-- Adding pool predictions we will use cpr for Month M  
 SELECT *
 INTO TEMP TABLE poolpredictionscurr
 FROM poolpredictions
 WHERE poolpredictions.date = '2021-09-01';
 
-
--- SELECT * FROM pools INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip LIMIT 2; 
-
--- the temp table that sums up original face in platinum them and groups them by poolname and indicator
--- which we will use to join to our pool table, so this is fine but need a date thing does it matter if it is 
---active or not.. going to assumme it does not
-
+-- will get original face in platinums
 -- I think this is measured in pennies
 
 SELECT 
@@ -75,25 +69,7 @@ GROUP BY
     poolname,
     indicator;
 
--- adding original face in cmos 
-
--- TEMP TABLE 
--- not really sure how date is being used..... allmost all cmos has not been updated since june..
----NEEDS TO BE CHANGED
-
---old way
-
--- SELECT
---     cusip,
---     date,
---     COUNT (*),
---     SUM(faceincmo) AS ofincmo
--- INTO TEMP TABLE ofpoolincmo
--- FROM
---     ofincmos
--- GROUP BY
---     cusip,
---     date;
+-- GETTING original face in cmos 
 
 -- So CMOS is month M-1 thought month M seens to be ok too
 
@@ -116,6 +92,7 @@ GROUP BY
 ----now to add feds and we are good, the fed uses current face so we can just keep it like that 
 -- Switched back to june...
 
+-- GETTING CURRENT FACE IN FED
 --temp table, fed holdings has only one per pool?? I guess so 
 -- SO Month M + 1.5
 
@@ -126,7 +103,8 @@ WHERE fedholdings.asofdate = '2021-10-20';
 
 
   
--- joining it to other stuff 
+-- joining Pool data with Original and current face in other stuff
+-- A lot of the columns can probably be dropped but they are not really hurting anything 
 --this just needs to be turned into a copy statement and I need to check on which data we want 
 -- Actual CDR should be added might hav it not sure 
 
@@ -137,7 +115,7 @@ SELECT
   poolscurr.type,
   poolscurr.issuedate,
   poolscurr."remainingBalance" AS currface,
-  --   poolscurr.factor,
+  poolscurr."interestRate" AS coupon,
   --   ofpoolincmo.ofincmo,
   ofpoolincmo.ofincmo * poolscurr.factor AS cfincmo,
   fedholdingscurr.currentfacevalue AS cfinfed,
@@ -166,27 +144,38 @@ FROM
 
 -- \COPY (SELECT * FROM pooldataforweb) to 'C:\Users\micha\pooldataforweb' csv header;
 
----------pools with negative current face 
+---------pools with negative current face except probably needs colasce statemts 
 
-SELECT cusip,
-currface - cfincmo - cfinfed - cfinplat AS minus,
-currface,
-cfincmo,
-cfinfed,
-cfinplat
+SELECT 
+  -- count(*)
+  cusip,
+  COALESCE(currface, 0) - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS minus,
+  currface,
+  cfincmo,
+  cfinfed,
+  cfinplat
 FROM pooldataforweb
-WHERE currface - cfincmo - cfinfed - cfinplat < -1
+WHERE COALESCE(currface, 0) - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0)  < -1
 -- WHERE cusip = '36176ADT3'
-ORDER BY currface - cfincmo - cfinfed - cfinplat ASC
+ORDER BY COALESCE(currface, 0) - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0)  ASC
 LIMIT 10;
 
 -- negative float hopefuly from a collapsed cmo 
 
---    cusip   |       minus        |  currface   |      cfincmo       |  cfinfed   |     cfinplat
--- -----------+--------------------+-------------+--------------------+------------+-------------------
---  36202FQ58 | -4355365.219694724 | 15562036.03 | 13918447.143015096 | 5992086.19 | 6867.916679626912
+--    cusip   |        minus        |  currface  |      cfincmo       | cfinfed |      cfinplat
+-- -----------+---------------------+------------+--------------------+---------+--------------------
+--  36202DV40 |  -77730.42457926416 | 1530169.19 | 1601233.8054943958 |         |  6665.809084868313
+--  36202DWH0 |  -69654.79766470904 |  1356968.3 | 1317108.1576122101 |         | 109514.94005249895
+--  36202DVP3 | -18543.307074425626 | 1513514.79 |  980775.9958863385 |         |  551282.1011880871
+--  36202DXE6 | -2831.6642493012323 |  548357.82 |  545856.2362003691 |         | 5333.2480489321015
 
 -- \COPY (SELECT cusip, currface - cfincmo - cfinfed - cfinplat AS minus, currface, cfincmo, cfinfed, cfinplat FROM pooldataforweb WHERE currface - cfincmo - cfinfed - cfinplat < 0 ORDER BY currface - cfincmo - cfinfed - cfinplat DESC) to 'C:\Users\micha\poolswithnegativecf' csv header;
+
+-- CHECKING CMOS of pools with negative float 
+SELECT * 
+FROM uniqueofincmos 
+WHERE cusip IN ( '36202DV40', '36202DWH0') 
+ORDER BY cmo;
 
 -- cmos_builder=# SELECT * FROM uniqueofincmos where cusip = '36202FQ58';
 --     cmo     |   cusip   | faceincmo |    date    | collapsed
@@ -200,7 +189,10 @@ LIMIT 10;
 --  2011-080-2 | 36202FQ58 |     87441 | 2011-01-01 |
 
 
+-- Here I am only interested in the cprs (predicted and actual) and thier float 
+
 SELECT 
+    coupon,
     curractualcpr,
     cprprediction,
     COALESCE(currface, 0) - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float
@@ -210,32 +202,270 @@ WHERE COALESCE(currface, 0) - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COAL
 
 -- \COPY (SELECT * FROM g2poolswithcurrfloat) to 'C:\Users\micha\g2poolswithcurrfloat' csv header;
 
+-- what is max cpr .9999 and min -7 
+-- Negative CPR count as Zero 
+--  we have no null floats
+-- so just summing everything is 0 and above
+
+\set coupon 5
+-- SELECT * FROM foo WHERE bar = :'myvariable'
+
+SELECT 
+    coupon,
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE coupon = :'coupon'
+GROUP BY coupon;
+
+ 8933
+
+----------------------------
+-- just going to do .05 increaments I am sure there is a better way but that will have to wait 
+-- nothing after .75 for coupon 5
+
+\set coupon 5
+\set cpr .75
+
+SELECT 
+    coupon,
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= :'cpr'
+AND coupon = :'coupon'
+GROUP BY coupon;
+
+8933
+
+ coupon | round
+--------+-------
+      5 |  8794
+
+ coupon | round
+--------+-------
+      5 |  8636
+
+ coupon | round
+--------+-------
+      5 |  8410
+
+ coupon | round
+--------+-------
+      5 |  8120
+
+ coupon | round
+--------+-------
+      5 |  7300
+
+ coupon | round
+--------+-------
+      5 |  6419
+
+ coupon | round
+--------+-------
+      5 |  6189
+
+ coupon | round
+--------+-------
+      5 |  5853
+
+ coupon | round
+--------+-------
+      5 |  5422
+
+ coupon | round
+--------+-------
+      5 |  3859
+
+ coupon | round
+--------+-------
+      5 |  1949
+ coupon | round
+--------+-------
+      5 |   333
+
+ coupon | round
+--------+-------
+      5 |    11
+
+ coupon | round
+--------+-------
+      5 |    11
+
+ coupon | round
+--------+-------
+      5 |    11
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .1;
+
+ 669811
+
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .15;
+
+ 616160
+
+
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .20;
+
+ 600036
+
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .25;
+
+511758
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .3;
+
+456201
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .35;
+
+421243
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .4;
+
+332102
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .45;
+
+178385
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .5;
+
+
+99819
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .55;
+
+18805
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .6;
+
+ 1668
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .65;
+
+ 1243
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .7;
+
+ 427
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .75;
+
+108
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .8;
+
+95
+
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .85;
+
+ 94
+
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .9;
+
+ 6
+
+----------------------------------
+
+SELECT 
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= .95;
+
+ 1
+
+
+
+
+
+
 
 SELECT 
     curractualcpr,
     SUM(COALESCE(float, 0))
 FROM g2poolswithcurrfloat
-WHERE curractualcpr > .7
+WHERE curractualcpr <= -1
 GROUP BY curractualcpr
 ORDER BY curractualcpr
 ;
 
-SELECT * FROM g2poolswithcurrfloat WHERE float is null;
+-- SELECT * FROM g2poolswithcurrfloat WHERE float is null;
 
 
----------pools with current face above zero 
-
-SELECT cusip,
-currface - cfincmo - cfinfed - cfinplat AS float,
-currface,
-cfincmo,
-cfinfed,
-cfinplat
-FROM pooldataforweb
-WHERE currface - cfincmo - cfinfed - cfinplat > 0
-ORDER BY currface - cfincmo - cfinfed - cfinplat DESC
-LIMIT 10;
-
+------------------- I DON'T THINK I AM USING ANY OF THIS 
 
 SELECT 
   *
