@@ -211,17 +211,39 @@ FROM
 
 ---------pools with negative current face 
 
-SELECT cusip,
-currface - cfincmo - cfinfed - cfinplat AS minus,
+SELECT 
+cusip,
+currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS minus,
 currface,
 cfincmo,
 cfinfed,
 cfinplat
 FROM pooldataforweb
-WHERE currface - cfincmo - cfinfed - cfinplat < -1
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < 0
 -- WHERE cusip = '36176ADT3'
-ORDER BY currface - cfincmo - cfinfed - cfinplat ASC
+ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC
 LIMIT 10;
+
+-- ten pools with biggest negative current face 
+   cusip   |        minus        |  currface   |      cfincmo       | cfinfed |     cfinplat
+-----------+---------------------+-------------+--------------------+---------+-------------------
+ 36176XFU8 | -15720695.909210261 | 26275098.47 |  17511095.48189144 |         | 24484698.89731882
+ 36182YTE9 |  -9081063.442717202 |  4709605.07 | 13790668.512717202 |         |
+ 36182DZP3 |  -5920165.502133414 |  3070305.84 |  8990471.342133414 |         |
+ 36198T7F3 |   -5556431.43667124 |  2881666.69 |   8438098.12667124 |         |
+ 36181CKY3 |  -5283343.469369981 |  2740038.39 |  8023381.859369982 |         |
+ 36176XKQ1 |  -5199656.005360008 | 10487058.06 |  7768891.632201176 |         | 7917822.433158833
+ 36183FM89 |  -5171443.066942126 |  2682004.63 |  7853447.696942125 |         |
+ 3620A8NB5 |  -5101577.557744698 |   5281969.8 | 10383547.357744697 |         |
+ 36182D6Y6 |  -5002125.179379499 |  2594193.35 |  7596318.529379498 |         |
+ 36181CGQ5 |  -4716447.295755612 |   2446035.6 |  7162482.895755611 |         |
+
+SELECT * 
+FROM uniqueofincmos 
+WHERE cusip IN ( '36176XFU8', '36182YTE9', '36182DZP3', '36198T7F3', 
+  '36181CKY3', '36176XKQ1', '36183FM89', '3620A8NB5', '36182D6Y6', '36181CGQ5' ) 
+ORDER BY cmo;
+
 
 -- \COPY (SELECT cusip, currface - cfincmo - cfinfed - cfinplat AS minus, currface, cfincmo, cfinfed, cfinplat FROM pooldataforweb WHERE currface - cfincmo - cfinfed - cfinplat < 0 ORDER BY currface - cfincmo - cfinfed - cfinplat DESC) to 'C:\Users\micha\poolswithnegativecf' csv header;
 

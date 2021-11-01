@@ -1,0 +1,205 @@
+-- doing this a bit differently now 10/31/21
+
+-- going to use cmos database not cmos_builder hopefully faster .....
+
+
+--- this is copied from my first g2 graph needs to be changed ...
+
+SELECT 
+    coupon,
+    curractualcpr,
+    cprprediction,
+    COALESCE(currentface, 0) - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float
+INTO TEMP TABLE g2poolswithcurrfloat
+FROM pools
+-- don't need that anymore 
+-- WHERE COALESCE(currentface, 0) - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1;
+
+-- \COPY (SELECT * FROM g2poolswithcurrfloat) to 'C:\Users\micha\g2poolswithcurrfloat' csv header;
+
+-- what is max cpr .9999 and min -7 
+-- Negative CPR count as Zero 
+--  we have no null floats
+-- so just summing everything is 0 and above
+
+\set coupon 5
+-- SELECT * FROM foo WHERE bar = :'myvariable'
+
+SELECT 
+    coupon,
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE coupon = :'coupon'
+GROUP BY coupon;
+
+ 8933
+
+----------------------------
+-- just going to do .05 increaments I am sure there is a better way but that will have to wait 
+-- nothing after .75 for coupon 5
+
+\set coupon 5
+\set cpr .8
+
+SELECT 
+    coupon,
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE curractualcpr >= :'cpr'
+AND coupon = :'coupon'
+GROUP BY coupon;
+
+ coupon | round
+--------+-------
+      5 |  9644
+ coupon | round
+--------+-------
+      5 |  9218
+
+ coupon | round
+--------+-------
+      5 |  9057
+
+ coupon | round
+--------+-------
+      5 |  8819
+
+ 8509
+7614
+ 6662
+ 6430
+ 6094
+  5615
+  4009
+  2100
+  333
+   11
+    11
+   11
+----------------------------------
+
+\set coupon 5
+\set cpr .3
+
+SELECT 
+    coupon,
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE cprprediction >= :'cpr'
+AND coupon = :'coupon'
+GROUP BY coupon;
+
+
+
+-- 9291
+-- 9291
+-- 9234
+-- 8757
+-- 7476
+-- 6311
+--   6122
+-- 5622
+-- 903
+
+
+
+
+create or replace function get_float_sum_predicted(couponval double precision, cprval double precision)
+returns int
+language plpgsql
+as
+$$
+declare
+   sumoffloat double precision;
+begin
+   SELECT 
+        ROUND (SUM(float)/1000000) 
+    INTO sumoffloat
+    FROM g2poolswithcurrfloat
+    WHERE cprprediction >= cprval
+    AND coupon = couponval;
+   
+   return sumoffloat;
+end;
+$$;
+
+SELECT get_float_sum_predicted(5, .3);
+
+
+create or replace function get_float_sum_actual(couponval double precision, cprval double precision, date DATE, actual BOOLEAN)
+returns int
+language plpgsql
+as
+$$
+declare
+   sumoffloat double precision;
+begin
+   SELECT
+        ROUND (SUM(float)/1000000) 
+    INTO sumoffloat
+    FROM g2poolswithcurrfloat
+    WHERE curractualcpr >= cprval
+    AND coupon = couponval;
+   
+ INSERT INTO sumoffloats (coupon, cpr, floatsum, date, actual)
+    VALUES(couponval, cprval, sumoffloat, date, actual);
+
+    return sumoffloat;
+end;
+$$;
+
+\set coupon 4.5
+
+SELECT 
+    coupon,
+    ROUND (SUM(float)/1000000)
+FROM g2poolswithcurrfloat
+WHERE coupon = :'coupon'
+GROUP BY coupon;
+
+SELECT get_float_sum_actual(4.5, .05, '2021-09-01', TRUE);
+
+-- float for cpr actual COUPON 4.5 .00-.85
+ 34263
+ 34140
+ 34135
+ 34016
+ 33821
+ 30029
+  25716
+  24168
+  23296
+  21163
+  9531
+  1546
+82    
+  82
+   82
+   82
+    82
+    81
+
+    -- float for cpr Predicted COUPON 4.5 .00-.45
+     34263
+    34157
+    34157
+    34155
+    33916
+    33590
+    24375
+     23689
+     22018
+     12635
+
+
+     ---------------------
+
+    --  trying to automate it more abbrev
+    CREATE TABLE sumoffloats (
+	    coupon DOUBLE PRECISION,
+        cpr DOUBLE PRECISION,
+        floatsum DOUBLE PRECISION,
+        date DATE,
+        actual BOOLEAN,
+        PRIMARY KEY( coupon, cpr, date, actual) 
+);

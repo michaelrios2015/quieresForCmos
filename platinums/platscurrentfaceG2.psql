@@ -188,15 +188,15 @@ FROM
 ---------pools with negative current face 
 
 SELECT cusip,
-currface - cfincmo - cfinfed - cfinplat AS minus,
+currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS minus,
 currface,
 cfincmo,
 cfinfed,
 cfinplat
 FROM platdataforweb
-WHERE currface - cfincmo - cfinfed - cfinplat < 1
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < 1
 -- WHERE cusip = '36176ADT3'
-ORDER BY currface - cfincmo - cfinfed - cfinplat ASC
+ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC
 LIMIT 10;
 
 -- \COPY (SELECT cusip, currface - cfincmo - cfinfed - cfinplat AS minus, currface, cfincmo, cfinfed, cfinplat FROM pooldataforweb WHERE currface - cfincmo - cfinfed - cfinplat < 0 ORDER BY currface - cfincmo - cfinfed - cfinplat DESC) to 'C:\Users\micha\poolswithnegativecf' csv header;

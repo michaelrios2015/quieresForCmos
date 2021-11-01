@@ -196,19 +196,37 @@ FROM
 
 ---------pools with negative current face 
 
-SELECT cusip,
-currface - cfincmo - cfinfed - cfinplat AS minus,
+SELECT 
+  -- COUNT(*)
+cusip,
+currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS minus,
 currface,
 cfincmo,
 cfinfed,
 cfinplat
 FROM pooldataforweb
-WHERE currface - cfincmo - cfinfed - cfinplat < -1
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -100000
 -- WHERE cusip = '36176ADT3'
-ORDER BY currface - cfincmo - cfinfed - cfinplat ASC
+ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC
 LIMIT 10;
 
 -- \COPY (SELECT cusip, currface - cfincmo - cfinfed - cfinplat AS minus, currface, cfincmo, cfinfed, cfinplat FROM pooldataforweb WHERE currface - cfincmo - cfinfed - cfinplat < 0 ORDER BY currface - cfincmo - cfinfed - cfinplat DESC) to 'C:\Users\micha\poolswithnegativecf' csv header;
+
+   cusip   |        minus        | currface  |      cfincmo       | cfinfed |      cfinplat
+-----------+---------------------+-----------+--------------------+---------+--------------------
+ 36208WER0 |          -184544.14 | 184544.14 |          184544.14 |         |          184544.14
+ 36206YPP0 | -122757.48522370584 | 285306.73 |  335323.4945248382 |         |  72740.72069886759
+ 36208T2Q2 | -120083.96416844649 | 480893.52 |  270986.4405261687 |         | 329991.04364227783
+ 36213TB51 | -108053.44882188988 | 393130.13 | 185488.44769067777 |         |  315695.1311312121
+
+
+SELECT * 
+FROM uniqueofincmos 
+WHERE cusip IN ( '36208WER0', '36206YPP0', '36208T2Q2', 
+  '36213TB51'  )
+AND collapsed IS NULL 
+ORDER BY cmo;
+
 
 
 SELECT *
