@@ -125,28 +125,35 @@ $$;
 
 SELECT get_float_sum_predicted(5, .3);
 
+-- THIS SHOULD BE GOOD cpr does a weird thing when it's adding + .05 but that's fine it can be handled later 
 
-create or replace function get_float_sum_actual(couponval double precision, cprval double precision, date DATE, actual BOOLEAN)
-returns int
+create or replace PROCEDURE get_float_sum_actual(couponval real, cprval real, date DATE, actual BOOLEAN)
 language plpgsql
 as
 $$
 declare
    sumoffloat double precision;
 begin
-   SELECT
-        ROUND (SUM(float)/1000000) 
-    INTO sumoffloat
-    FROM g2poolswithcurrfloat
-    WHERE curractualcpr >= cprval
-    AND coupon = couponval;
-   
- INSERT INTO sumoffloats (coupon, cpr, floatsum, date, actual)
-    VALUES(couponval, cprval, sumoffloat, date, actual);
+   WHILE cprval < 1 loop
+    SELECT
+            COALESCE(ROUND (SUM(float)/1000000), 0) 
+        INTO sumoffloat
+        FROM g2poolswithcurrfloat
+        WHERE curractualcpr >= cprval
+        AND coupon = couponval;
+    
+    INSERT INTO sumoffloats (coupon, cpr, floatsum, date, actual)
+        VALUES(couponval, cprval, sumoffloat, date, actual);
 
-    return sumoffloat;
+    cprval := ROUND (CAST ((cprval + .05) AS numeric), 2);
+   END loop; 
+
+
 end;
 $$;
+
+
+call get_float_sum_actual (2, .05, '2021-09-01', TRUE);
 
 \set coupon 4.5
 
