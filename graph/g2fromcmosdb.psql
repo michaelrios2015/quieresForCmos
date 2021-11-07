@@ -129,7 +129,7 @@ SELECT get_float_sum_predicted(5, .3);
 
 -- works pretty good would have been great if there was a way to do a loop in a loop 
 -- still a big step up 
-create or replace PROCEDURE get_float_sum_actual(couponval real, cprval real, date DATE, actual BOOLEAN)
+create or replace PROCEDURE get_float_sum_actual(couponval real, cprval real, date DATE)
 language plpgsql
 as
 $$
@@ -145,13 +145,80 @@ begin
             AND coupon = couponval;
         
             INSERT INTO sumoffloats (coupon, cpr, floatsum, date, actual)
-            VALUES(couponval, cprval/100, sumoffloat, date, actual);
+            VALUES(couponval, cprval/100, sumoffloat, date, TRUE);
 
         cprval := cprval + 5;
     END loop; 
 
 end;
 $$;
+
+-- Seems to work :) 
+
+create or replace PROCEDURE get_float_sum(date DATE)
+language plpgsql
+as
+$$
+declare
+   couponval real := 1;
+begin
+
+WHILE couponval < 10 loop
+
+declare
+   sumoffloatactual double precision;
+   sumoffloatpredicted double precision;
+   cprval real := 5;
+begin
+
+       SELECT
+            COALESCE(ROUND (SUM(float)/1000000), 0) 
+            INTO sumoffloatactual
+            FROM g2poolswithcurrfloat
+            WHERE coupon = couponval;
+
+
+      INSERT INTO sumoffloats (coupon, cpr, floatsumactual, floatsumpredicted, date)
+            VALUES(couponval, 0 , sumoffloatactual, sumoffloatactual, date);
+
+
+    WHILE cprval < 100 loop
+        SELECT
+            COALESCE(ROUND (SUM(float)/1000000), 0) 
+            INTO sumoffloatactual
+            FROM g2poolswithcurrfloat
+            WHERE curractualcpr >= cprval/100
+            AND coupon = couponval;
+
+        SELECT
+            COALESCE(ROUND (SUM(float)/1000000), 0) 
+            INTO sumoffloatpredicted
+            FROM g2poolswithcurrfloat
+            WHERE cprprediction >= cprval/100
+            AND coupon = couponval;
+
+        
+        
+            INSERT INTO sumoffloats (coupon, cpr, floatsumactual, floatsumpredicted, date)
+            VALUES(couponval, cprval/100, sumoffloatactual, sumoffloatpredicted, date);
+
+        cprval := cprval + 5;
+    END loop; 
+
+end;
+
+       couponval := couponval + .5;
+    END loop; 
+
+end;
+
+
+$$;
+
+
+call get_float_sum ('2021-09-01');
+
+
 
 
 call get_float_sum_actual (1, 5, '2021-09-01', TRUE);
@@ -206,8 +273,8 @@ SELECT get_float_sum_actual(4.5, .05, '2021-09-01', TRUE);
     CREATE TABLE sumoffloats (
 	    coupon DOUBLE PRECISION,
         cpr DOUBLE PRECISION,
-        floatsum DOUBLE PRECISION,
+        floatsumactual DOUBLE PRECISION,
+        floatsumpredicted DOUBLE PRECISION,
         date DATE,
-        actual BOOLEAN,
-        PRIMARY KEY( coupon, cpr, date, actual) 
+        PRIMARY KEY(coupon, cpr, date) 
 );

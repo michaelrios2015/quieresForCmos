@@ -205,7 +205,7 @@ cfincmo,
 cfinfed,
 cfinplat
 FROM pooldataforweb
-WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < 0
 -- WHERE cusip = '36176ADT3'
 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC
 LIMIT 10;
