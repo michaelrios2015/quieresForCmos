@@ -1,3 +1,5 @@
+-- NOW USES VARIABLES can work for g1 or g2
+
 -- SET TO SEPTEMBER DATA 10/24/21
 
 -- copied from g2 on 10/17 just going to modify it slightly I am sure there is a way to use variable
@@ -14,6 +16,21 @@
 -- this is month M
 -- So we want two reports one for pools with Type = "SP' and Indicator = 'M" G2
 -- and one with Type = "SP' and Indicator = 'X" G1
+
+
+\set currentmonth 'date ''2021-09-01'''
+
+\set pastmonth 'date ''2021-08-01'''
+
+\set feddate 'date ''2021-10-20'''
+
+-- G1 G1 and one with Type = "SF' and Indicator = 'X" G1
+\set indicator '\'X\'' 
+
+-- G2 G2 and one with Type = "SF' and Indicator = 'M" G2
+
+-- \set indicator '\'M\'' 
+
 
 
 -- ONLY TBA Elig ones 
@@ -44,9 +61,8 @@ INTO TEMP TABLE platscurr
 FROM platinums 
 INNER JOIN platinumbodies
 ON platinums.cusip = platinumbodies.cusip 
-WHERE platinumbodies.date = '2021-09-01'
--- AND platinumbodies.indicator = 'M'
-AND platinumbodies.indicator = 'X'
+WHERE platinumbodies.date = :currentmonth
+AND platinumbodies.indicator = :indicator
 AND platinums.type = 'SP'
 AND platinumbodies.istbaelig IS TRUE;
 -- LIMIT 3;
@@ -57,7 +73,7 @@ AND platinumbodies.istbaelig IS TRUE;
 SELECT *
 INTO TEMP TABLE pastactualcpr
 FROM platinumbodies
-WHERE platinumbodies.date = '2021-08-01';
+WHERE platinumbodies.date = :pastmonth;
 
 
 -- will need actual cdrs not sure if this is the best way to get it...
@@ -65,7 +81,7 @@ WHERE platinumbodies.date = '2021-08-01';
 SELECT *
 INTO TEMP TABLE pastactualcdr
 FROM platinumbodies
-WHERE platinumbodies.date = '2021-08-01';
+WHERE platinumbodies.date = :pastmonth;
 -- LIMIT 1;
 
 
@@ -76,7 +92,7 @@ WHERE platinumbodies.date = '2021-08-01';
 SELECT *
 INTO TEMP TABLE poolfhavascurr
 FROM poolfhavas
-WHERE poolfhavas.date = '2021-09-01';
+WHERE poolfhavas.date = :currentmonth;
 
 
 -- SELECT * FROM pools INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip LIMIT 2; 
@@ -94,7 +110,7 @@ SELECT
     SUM(faceinplatinum) as ofinplat
 INTO TEMP TABLE ofinplatinum 
 FROM platcolls
-WHERE born <= '2021-09-01'
+WHERE born <= :currentmonth
 -- LIMIT 4;
 GROUP BY
     poolname;
@@ -115,8 +131,8 @@ SELECT
 INTO TEMP TABLE ofpoolincmo
 FROM
     uniqueofincmos
-WHERE date <= '2021-08-01'
-AND ( collapsed > '2021-08-01' OR collapsed IS NULL) 
+WHERE date <= :pastmonth
+AND ( collapsed > :pastmonth OR collapsed IS NULL) 
 GROUP BY
     cusip;
 --     date
@@ -132,7 +148,7 @@ GROUP BY
 SELECT * 
 INTO TEMP TABLE fedholdingscurr
 FROM fedholdings
-WHERE fedholdings.asofdate = '2021-10-20';
+WHERE fedholdings.asofdate = :feddate;
 
 
   
@@ -184,26 +200,6 @@ FROM
 --   10;
 
 
--- this gets all the pools, eventually will want to limit it to pools with float 
-
--- \COPY (SELECT * FROM pooldataforweb) to 'C:\Users\micha\pooldataforweb' csv header;
-
----------pools with negative current face 
-
-SELECT cusip,
-currface - cfincmo - cfinfed - cfinplat AS minus,
-currface,
-cfincmo,
-cfinfed,
-cfinplat
-FROM platdataforweb
-WHERE currface - cfincmo - cfinfed - cfinplat < -1
--- WHERE cusip = '36176ADT3'
-ORDER BY currface - cfincmo - cfinfed - cfinplat ASC
-LIMIT 10;
-
--- \COPY (SELECT cusip, currface - cfincmo - cfinfed - cfinplat AS minus, currface, cfincmo, cfinfed, cfinplat FROM pooldataforweb WHERE currface - cfincmo - cfinfed - cfinplat < 0 ORDER BY currface - cfincmo - cfinfed - cfinplat DESC) to 'C:\Users\micha\poolswithnegativecf' csv header;
-
 
 SELECT *
 INTO TEMP TABLE g1platswithcurrfloat
@@ -212,31 +208,28 @@ WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat
 
 \COPY (SELECT * FROM g1platswithcurrfloat) to 'C:\Users\micha\g1platswithcurrfloat' csv header;
 
----------pools with current face above zero 
 
-SELECT cusip,
-currface - cfincmo - cfinfed - cfinplat AS float,
+-- checking for minus float
+
+SELECT 
+cusip,
+currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS minus,
 currface,
 cfincmo,
 cfinfed,
 cfinplat
-FROM pooldataforweb
-WHERE currface - cfincmo - cfinfed - cfinplat > 0
-ORDER BY currface - cfincmo - cfinfed - cfinplat DESC
-LIMIT 10;
+FROM platdataforweb
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1;
 
+   cusip   |       minus        |  currface   |      cfincmo      | cfinfed | cfinplat
+-----------+--------------------+-------------+-------------------+---------+----------
+ 36241LCV6 | -20922795.39723496 | 20923597.67 | 41846393.06723496 |         |
 
-SELECT 
-  *
--- currface - cfincmo - cfinfed - cfinplat AS float
--- currface,
--- cfincmo,
--- cfinfed,
--- cfinplat
-FROM pooldataforweb
--- WHERE currface - cfincmo - cfinfed - cfinplat <= 1
-ORDER BY currface - cfincmo - cfinfed - cfinplat DESC
-LIMIT 1;
+SELECT * 
+FROM uniqueofincmos 
+WHERE cusip IN ( '36241LCV6')
+AND collapsed IS NULL 
+ORDER BY cmo;
 
 
 -- just counting the ones that still have float 

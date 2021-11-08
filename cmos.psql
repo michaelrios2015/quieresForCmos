@@ -401,8 +401,6 @@ SET collapsed = '2006-01-01'
 WHERE cmo = '2003-042-5';  
 
  
- 
-
 UPDATE uniqueofincmos
 SET collapsed = '2006-01-01' 
 WHERE cmo = '2003-042-8';  
@@ -422,13 +420,41 @@ UPDATE uniqueofincmos
 SET collapsed = '2006-01-01' 
 WHERE cmo = '1999-007-A';  
 
+
+-------------------------------
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2015-094-10';  
+ 
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2015-094-11';  
+
+ 
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2015-094-12';  
+
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2015-069-9';  
+ 
+UPDATE uniqueofincmos
+SET collapsed = '2006-01-01' 
+WHERE cmo = '2015-069-11';  
+
+
    
    
-   
  
  
  
  
+
+
+
+
  
    
  

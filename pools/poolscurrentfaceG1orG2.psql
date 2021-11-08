@@ -1,18 +1,31 @@
+-- so this will be the main function for the pools the indicator just needs to be changed 
+
 -- SET FOR SEP 10/24/21
 
--- copying on 10/17/21 just a couple of changes
+-- this is month M AND G1
 
--- I THINK THIS IS THE LATEST 10/10/21
 
--- TEMP TABLES 
 
---- SO I SHOULD BE ABLE To update the dates add the temp tables and run my query, yes!!! 
--- combining pool and poolbodies getting what I need from both
--- this is month M
 -- So we want two reports one for pools with Type = "SF' and Indicator = 'M" G2
--- and one with Type = "SF' and Indicator = 'X" G1
+-- I wonder if I can do G1 and G2 at the same time....or maybe just make indicator varibale..
 
 -- ONLY WANT TBA ELIG ONES FOR MONTH M
+
+-- now with variables
+
+\set currentmonth 'date ''2021-09-01'''
+
+\set pastmonth 'date ''2021-08-01'''
+
+\set feddate 'date ''2021-10-20'''
+
+-- G1 G1 and one with Type = "SF' and Indicator = 'X" G1
+-- \set indicator '\'X\'' 
+
+-- G2 G2 and one with Type = "SF' and Indicator = 'M" G2
+
+\set indicator '\'M\'' 
+
 
 SELECT   
     pools.cusip,
@@ -34,9 +47,8 @@ INTO TEMP TABLE poolscurr
 FROM pools 
 INNER JOIN poolbodies
 ON pools.cusip = poolbodies.cusip 
-WHERE poolbodies.date = '2021-09-01'
--- AND pools.indicator = 'M'
-AND pools.indicator = 'X'
+WHERE poolbodies.date = :currentmonth
+AND pools.indicator = :indicator
 AND pools.type = 'SF'
 AND pools.istbaelig IS TRUE;
 -- LIMIT 10;
@@ -46,26 +58,26 @@ AND pools.istbaelig IS TRUE;
 SELECT *
 INTO TEMP TABLE currentactualcpr
 FROM actualcprs
-WHERE actualcprs.date = '2021-09-01';
+WHERE actualcprs.date = :currentmonth;
 -- LIMIT 1;
 
 SELECT *
 INTO TEMP TABLE pastactualcpr
 FROM actualcprs
-WHERE actualcprs.date = '2021-08-01';
+WHERE actualcprs.date = :pastmonth;
 
 
 -- will need actual cdrs not sure if this is the best way to get it...
 SELECT *
 INTO TEMP TABLE currentactualcdr
 FROM actualcdrs
-WHERE actualcdrs.date = '2021-09-01';
+WHERE actualcdrs.date = :currentmonth;
 -- LIMIT 1;
 
 SELECT *
 INTO TEMP TABLE pastactualcdr
 FROM actualcdrs
-WHERE actualcdrs.date = '2021-08-01';
+WHERE actualcdrs.date = :pastmonth;
 -- LIMIT 1;
 
 -- Adding pool predictions we will use cpr, cprnext, cdr and cdrnext this will be the month M and M+1
@@ -73,7 +85,7 @@ WHERE actualcdrs.date = '2021-08-01';
 SELECT *
 INTO TEMP TABLE poolpredictionscurr
 FROM poolpredictions
-WHERE poolpredictions.date = '2021-09-01';
+WHERE poolpredictions.date = :currentmonth;
 
 -- ditto for poolfhavas
 -- I think I just use month M
@@ -81,7 +93,7 @@ WHERE poolpredictions.date = '2021-09-01';
 SELECT *
 INTO TEMP TABLE poolfhavascurr
 FROM poolfhavas
-WHERE poolfhavas.date = '2021-09-01';
+WHERE poolfhavas.date = :currentmonth;
 
 
 -- SELECT * FROM pools INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip LIMIT 2; 
@@ -99,7 +111,7 @@ SELECT
     SUM(faceinplatinum) as ofinplat
 INTO TEMP TABLE ofinplatinum 
 FROM platcolls
-WHERE born <= '2021-09-01'
+WHERE born <= :currentmonth
 -- LIMIT 4;
 GROUP BY
     poolname,
@@ -118,8 +130,8 @@ SELECT
 INTO TEMP TABLE ofpoolincmo
 FROM
     uniqueofincmos
-WHERE date <= '2021-08-01'
-AND ( collapsed > '2021-08-01' OR collapsed IS NULL) 
+WHERE date <= :pastmonth
+AND ( collapsed > :pastmonth OR collapsed IS NULL) 
 GROUP BY
     cusip;
 --     date
@@ -135,7 +147,7 @@ GROUP BY
 SELECT * 
 INTO TEMP TABLE fedholdingscurr
 FROM fedholdings
-WHERE fedholdings.asofdate = '2021-10-20';
+WHERE fedholdings.asofdate = :feddate;
 
 
   
@@ -205,75 +217,49 @@ cfincmo,
 cfinfed,
 cfinplat
 FROM pooldataforweb
-WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < 0
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1
 -- WHERE cusip = '36176ADT3'
 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC
 LIMIT 10;
 
 -- \COPY (SELECT cusip, currface - cfincmo - cfinfed - cfinplat AS minus, currface, cfincmo, cfinfed, cfinplat FROM pooldataforweb WHERE currface - cfincmo - cfinfed - cfinplat < 0 ORDER BY currface - cfincmo - cfinfed - cfinplat DESC) to 'C:\Users\micha\poolswithnegativecf' csv header;
 
-   cusip   |        minus        | currface |      cfincmo       | cfinfed |      cfinplat
------------+---------------------+----------+--------------------+---------+--------------------
- 36203LT28 | -3841.4017134382557 |  7440.73 | 3841.4017134382557 |         |            7440.73
- 36223NXZ2 | -2680.1959419359664 |  8741.72 |  4834.588210295596 |         |   6587.32773164037
- 36224JNE8 |  -2656.876029199541 |  5881.88 | 3023.6441824657973 |         |  5515.111846733744
- 36203QC66 | -1810.0975383673122 |  9365.18 |  6316.519939545205 |         |  4858.757598822108
- 36203LXA5 | -1313.4591927918082 | 23226.49 |  4222.292700357089 |         |  20317.65649243472
- 36203GF99 |  -927.9350294592953 |  2075.22 | 1079.5603510853043 |         | 1923.5946783739907
- 36224SHV7 |  -687.6347739070698 | 19274.78 |   7232.60064858288 |         | 12729.814125324188
- 36224TLK4 |  -683.6613352460563 |  4484.58 |  1684.223554237509 |         |  3484.017781008547
- 36203NRN0 |  -649.5229411574037 |  8954.68 | 1371.4819445240169 |         |  8232.720996633387
- 36203AUX2 |  -529.5987533826465 |  8138.42 | 1663.1481065246062 |         |   7004.87064685804
- 36223WQM9 |  -455.3887092421064 |  3142.88 | 1491.4188115737143 |         | 2106.8498976683923
- 36224KR43 |  -360.9523204141201 |  3993.26 |  1023.587055855543 |         | 3330.6252645585773
- 36223MAP1 |  -89.31656076649733 |  5368.87 | 1391.8809781351727 |         | 4066.3055826313243
- 36203HCS8 | -46.424366571288374 |  8343.68 | 1913.1880610061396 |         |  6476.916305565149
- 36224X6X4 | -32.029593043346495 |  1495.53 | 419.30678068556733 |         | 1108.2528123577792
- 36203JHT7 |  -27.24848044711257 |  4574.24 |  3899.525631287242 |         |  701.9628491598703
+--    cusip   |        minus        | currface |      cfincmo       | cfinfed |      cfinplat
+-- -----------+---------------------+----------+--------------------+---------+--------------------
+--  36203LT28 | -3841.4017134382557 |  7440.73 | 3841.4017134382557 |         |            7440.73
+--  36223NXZ2 | -2680.1959419359664 |  8741.72 |  4834.588210295596 |         |   6587.32773164037
+--  36224JNE8 |  -2656.876029199541 |  5881.88 | 3023.6441824657973 |         |  5515.111846733744
+--  36203QC66 | -1810.0975383673122 |  9365.18 |  6316.519939545205 |         |  4858.757598822108
+--  36203LXA5 | -1313.4591927918082 | 23226.49 |  4222.292700357089 |         |  20317.65649243472
+--  36203GF99 |  -927.9350294592953 |  2075.22 | 1079.5603510853043 |         | 1923.5946783739907
+--  36224SHV7 |  -687.6347739070698 | 19274.78 |   7232.60064858288 |         | 12729.814125324188
+--  36224TLK4 |  -683.6613352460563 |  4484.58 |  1684.223554237509 |         |  3484.017781008547
+--  36203NRN0 |  -649.5229411574037 |  8954.68 | 1371.4819445240169 |         |  8232.720996633387
+--  36203AUX2 |  -529.5987533826465 |  8138.42 | 1663.1481065246062 |         |   7004.87064685804
+--  36223WQM9 |  -455.3887092421064 |  3142.88 | 1491.4188115737143 |         | 2106.8498976683923
+--  36224KR43 |  -360.9523204141201 |  3993.26 |  1023.587055855543 |         | 3330.6252645585773
+--  36223MAP1 |  -89.31656076649733 |  5368.87 | 1391.8809781351727 |         | 4066.3055826313243
+--  36203HCS8 | -46.424366571288374 |  8343.68 | 1913.1880610061396 |         |  6476.916305565149
+--  36224X6X4 | -32.029593043346495 |  1495.53 | 419.30678068556733 |         | 1108.2528123577792
+--  36203JHT7 |  -27.24848044711257 |  4574.24 |  3899.525631287242 |         |  701.9628491598703
 
 
-SELECT * 
-FROM uniqueofincmos 
-WHERE cusip IN ( '36203LT28', '36223NXZ2', '36224JNE8',  
-  '36203QC66', '36203LXA5', '36203GF99',  '36224SHV7', '36224TLK4', '36203NRN0', 
-  '36203AUX2', '36223WQM9', '36224KR43', '36223MAP1', '36203HCS8', '36224X6X4', '36203JHT7' )
-AND collapsed IS NULL 
-ORDER BY cmo;
+-- SELECT * 
+-- FROM uniqueofincmos 
+-- WHERE cusip IN ( '36203LT28', '36223NXZ2', '36224JNE8',  
+--   '36203QC66', '36203LXA5', '36203GF99',  '36224SHV7', '36224TLK4', '36203NRN0', 
+--   '36203AUX2', '36223WQM9', '36224KR43', '36223MAP1', '36203HCS8', '36224X6X4', '36203JHT7' )
+-- AND collapsed IS NULL 
+-- ORDER BY cmo;
 
 
-
+-- might want to change some of the names at some point
 SELECT *
 INTO TEMP TABLE g1poolswithcurrfloat
 FROM pooldataforweb
 WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1;
 
 \COPY (SELECT * FROM g1poolswithcurrfloat) to 'C:\Users\micha\g1poolswithcurrfloat' csv header;
-
----------pools with current face above zero 
-
-SELECT cusip,
-currface - cfincmo - cfinfed - cfinplat AS float,
-currface,
-cfincmo,
-cfinfed,
-cfinplat
-FROM pooldataforweb
-WHERE currface - cfincmo - cfinfed - cfinplat > 0
-ORDER BY currface - cfincmo - cfinfed - cfinplat DESC
-LIMIT 10;
-
-
-SELECT 
-  *
--- currface - cfincmo - cfinfed - cfinplat AS float
--- currface,
--- cfincmo,
--- cfinfed,
--- cfinplat
-FROM pooldataforweb
--- WHERE currface - cfincmo - cfinfed - cfinplat <= 1
-ORDER BY currface - cfincmo - cfinfed - cfinplat DESC
-LIMIT 1;
 
 
 -- just counting the ones that still have float 
@@ -293,15 +279,3 @@ FROM pooldataforweb
 WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1
 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC
 LIMIT 100;
-
--- for G2
--- \COPY (SELECT *, currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float FROM pooldataforweb WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC) to 'C:\Users\micha\G2poolswithnegativecf' csv header;
-
-
--- for G1
-\COPY (SELECT *, currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float FROM pooldataforweb WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC) to 'C:\Users\micha\G1poolswithnegativecf' csv header;
-
-
-SELECT COUNT (*)
-FROM pooldataforweb
-WHERE currface IS NULL
