@@ -1,0 +1,14 @@
+-- so these seem to work fine should slow expand to other 
+
+create temporary table cprandcdr (cusip varchar, cpr double precision, cdr double precision );
+
+\COPY cprandcdr FROM 'C:\Users\micha\OctCPRCDR.txt' DELIMITER ',';
+
+
+INSERT INTO actualcprs (cusip, actualcpr, date)
+SELECT cusip, cpr/100, '2021-10-01'
+FROM cprandcdr;
+
+INSERT INTO actualcdrs (cusip, cdr, date)
+SELECT cusip, cdr/100, '2021-10-01'
+FROM cprandcdr;

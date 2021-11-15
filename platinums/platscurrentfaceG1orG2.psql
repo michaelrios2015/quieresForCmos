@@ -18,18 +18,18 @@
 -- and one with Type = "SP' and Indicator = 'X" G1
 
 
-\set currentmonth 'date ''2021-09-01'''
+\set currentmonth 'date ''2021-10-01'''
 
-\set pastmonth 'date ''2021-08-01'''
+\set pastmonth 'date ''2021-09-01'''
 
-\set feddate 'date ''2021-10-20'''
+\set feddate 'date ''2021-11-11'''
 
--- G1 G1 and one with Type = "SF' and Indicator = 'X" G1
-\set indicator '\'X\'' 
+-- G1: G1 and one with Type = "SF' and Indicator = 'X" G1
+-- \set indicator '\'X\'' 
 
--- G2 G2 and one with Type = "SF' and Indicator = 'M" G2
+-- G2: G2 and one with Type = "SF' and Indicator = 'M" G2
 
--- \set indicator '\'M\'' 
+\set indicator '\'M\'' 
 
 
 

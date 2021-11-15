@@ -1,3 +1,137 @@
+-- so the feddata is not usiing the right factor so I am 
+-- going to get spetember factor 
+
+-- OK i Think this worked  should probably add some comments... looks like we are using a small portion of the cusips in fedholdings 
+
+--  the dates
+\set currentmonth 'date ''2021-10-01'''
+
+\set pastmonth 'date ''2021-09-01'''
+
+\set feddate 'date ''2021-11-10'''
+
+-- pools previous factor
+SELECT   
+    pools.cusip,
+    pools.originalface,
+    poolbodies."remainingBalance",
+    -- calculating the factor on our own
+    poolbodies."remainingBalance" / pools.originalface AS factor, 
+    poolbodies.date
+INTO TEMP TABLE poolsfactorpreviosmonth
+FROM pools 
+INNER JOIN poolbodies
+ON pools.cusip = poolbodies.cusip 
+WHERE poolbodies.date = :pastmonth;
+-- LIMIT 10;
+
+-- pools current factor
+
+SELECT   
+    pools.cusip,
+    pools.originalface,
+    poolbodies."remainingBalance",
+    -- calculating the factor on our own
+    poolbodies."remainingBalance" / pools.originalface AS factor, 
+    poolbodies.date
+INTO TEMP TABLE poolsfactorcurrentmonth
+FROM pools 
+INNER JOIN poolbodies
+ON pools.cusip = poolbodies.cusip 
+WHERE poolbodies.date = :currentmonth;
+
+-- platinums previous factor
+
+SELECT   
+    platinums.cusip,
+    platinums.originalface,
+    platinumbodies.remainingbalance,
+    -- calculating the factor on our own
+    platinumbodies.remainingbalance / platinums.originalface AS factor, 
+    platinumbodies.date
+INTO TEMP TABLE platinumsfactorpreviosmonth
+FROM platinums 
+INNER JOIN platinumbodies
+ON platinums.cusip = platinumbodies.cusip 
+WHERE platinumbodies.date = :pastmonth;
+-- LIMIT 10;
+
+-- platinums current factor
+
+SELECT   
+    platinums.cusip,
+    platinums.originalface,
+    platinumbodies.remainingbalance,
+    -- calculating the factor on our own
+    platinumbodies.remainingbalance / platinums.originalface AS factor, 
+    platinumbodies.date
+INTO TEMP TABLE platinumsfactorcurrentmonth
+FROM platinums 
+INNER JOIN platinumbodies
+ON platinums.cusip = platinumbodies.cusip 
+WHERE platinumbodies.date = :currentmonth;
+
+-- the fed holdings to be modified
+
+SELECT * 
+INTO TEMP TABLE fedholdingscurr
+FROM fedholdings
+WHERE asofdate = :feddate;
+
+-- calculate new current face for pools
+
+SELECT 
+    fedholdingscurr.asofdate,
+    fedholdingscurr.cusip,
+    fedholdingscurr.currentfacevalue,
+    fedholdingscurr.isaggregated,
+    currentfacevalue/poolsfactorpreviosmonth.factor AS originalface,
+    (currentfacevalue/poolsfactorpreviosmonth.factor) * poolsfactorcurrentmonth.factor AS currentface
+INTO TEMP TABLE poolsadjustedcurrface
+FROM fedholdingscurr
+INNER JOIN poolsfactorpreviosmonth
+ON fedholdingscurr.cusip = poolsfactorpreviosmonth.cusip
+INNER JOIN poolsfactorcurrentmonth
+ON fedholdingscurr.cusip = poolsfactorcurrentmonth.cusip;
+-- LIMIT 2;
+
+-- calculate new current face for plats
+
+SELECT 
+    fedholdingscurr.asofdate,
+    fedholdingscurr.cusip,
+    fedholdingscurr.currentfacevalue,
+    fedholdingscurr.isaggregated,
+    currentfacevalue/platinumsfactorpreviosmonth.factor AS originalface,
+    (currentfacevalue/platinumsfactorpreviosmonth.factor) * platinumsfactorcurrentmonth.factor AS currentface
+INTO TEMP TABLE platsadjustedcurrface
+FROM fedholdingscurr
+INNER JOIN platinumsfactorpreviosmonth
+ON fedholdingscurr.cusip = platinumsfactorpreviosmonth.cusip
+INNER JOIN platinumsfactorcurrentmonth
+ON fedholdingscurr.cusip = platinumsfactorcurrentmonth.cusip;
+-- LIMIT 2;
+
+-- update the pools in fed
+
+UPDATE fedholdings
+SET currentfacevalue = platsadjustedcurrface.currentface
+FROM platsadjustedcurrface
+WHERE fedholdings.cusip = platsadjustedcurrface.cusip
+AND fedholdings.asofdate = '2021-11-10';
+
+-- update the plats in fed
+
+UPDATE fedholdings
+SET currentfacevalue = poolsadjustedcurrface.currentface
+FROM poolsadjustedcurrface
+WHERE fedholdings.cusip = poolsadjustedcurrface.cusip
+AND fedholdings.asofdate = '2021-11-10';
+
+---------------------------------------------------------
+-- this was older stuff from that I don't think I used 11/14/21
+
+
 ------ so just trying to convert currect face to original
 
 --- just getting the factor

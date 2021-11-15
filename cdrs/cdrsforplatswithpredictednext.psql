@@ -33,6 +33,13 @@
 
 -- what we need from pools
 
+-- using variables will try and trim it down more the next month 11/13/21
+
+
+\set currentmonth 'date ''2021-10-01'''
+
+\set pastmonth 'date ''2021-09-01'''
+
 SELECT
     pools.cusip,
     pools.name,
@@ -44,7 +51,7 @@ FROM
     pools
     INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
 WHERE
-    poolbodies.date = '2021-08-01';
+    poolbodies.date = :pastmonth;
 
 
 -- what we need from plats
@@ -59,7 +66,7 @@ FROM
     platinums
     INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
 WHERE
-    platinumbodies.date = '2021-08-01';
+    platinumbodies.date = :pastmonth;
 
 -- what we need from platcolls
 
@@ -74,7 +81,7 @@ FROM
     platcolls
 WHERE
     -- does not matter is active or not just don't want future ones
-    platcolls.born <= '2021-08-01';
+    platcolls.born <= :pastmonth;
 
 -- LIMIT 2;
 
@@ -140,7 +147,7 @@ FROM
 -- I guess it needs to be inner join becuase we need a cdr??
 -- this is where I had to deal with a null value I believe  
 INNER JOIN poolpredictions ON currpoolscdr.cusip = poolpredictions.cusip
-WHERE poolpredictions.date = '2021-09-01';
+WHERE poolpredictions.date = :currentmonth;
 
 
 ---------------------------------------------------------------------
@@ -154,7 +161,7 @@ SELECT
   platinumbodies.predictedcdrnext AS cdr
 INTO TEMP TABLE platcdr
 FROM  platinumbodies
-WHERE date = '2021-09-01';
+WHERE date = :currentmonth;
 
 -- so plat info for month m and cdr for m+1 
 
@@ -265,7 +272,7 @@ GROUP BY
   almoststepthree.platinumcusip;
 
 
--- \COPY (SELECT cusip, cdr from platinumbodies where date = '2021-09-01') to 'C:\Users\micha\platcdr' csv header; 
+-- \COPY (SELECT cusip, cdr from platinumbodies where date = :currentmonth) to 'C:\Users\micha\platcdr' csv header; 
 
 -- THIS IS All testing how to improve the while loop
 
@@ -285,7 +292,7 @@ FROM stepfour
 INNER JOIN platinumbodies
 ON stepfour.platinumcusip = platinumbodies.cusip
 WHERE stepfour.cdr = platinumbodies.predictedcdrnext
-AND platinumbodies.date = '2021-09-01';
+AND platinumbodies.date = :currentmonth;
 
 
 --- This will update platinum bodies cdrs now with m + 1
@@ -294,14 +301,14 @@ UPDATE platinumbodies
 SET predictedcdrnext = stepfour.cdr
 FROM stepfour
 WHERE stepfour.platinumcusip = platinumbodies.cusip
-AND platinumbodies.date = '2021-09-01';
+AND platinumbodies.date = :currentmonth;
 
 
 
 --- this can erease all the cdrs
 -- UPDATE platinumbodies
 -- SET cdr = NULL
--- WHERE platinumbodies.date = '2021-08-01';
+-- WHERE platinumbodies.date = :pastmonth;
 
 
 --------- some testing stuff

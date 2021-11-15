@@ -13,11 +13,11 @@
 
 -- now with variables
 
-\set currentmonth 'date ''2021-09-01'''
+\set currentmonth 'date ''2021-10-01'''
 
-\set pastmonth 'date ''2021-08-01'''
+\set pastmonth 'date ''2021-09-01'''
 
-\set feddate 'date ''2021-10-20'''
+\set feddate 'date ''2021-11-10'''
 
 -- G1 G1 and one with Type = "SF' and Indicator = 'X" G1
 -- \set indicator '\'X\'' 
@@ -204,8 +204,6 @@ FROM
 
 -- this gets all the pools, eventually will want to limit it to pools with float 
 
--- \COPY (SELECT * FROM pooldataforweb) to 'C:\Users\micha\pooldataforweb' csv header;
-
 ---------pools with negative current face 
 
 SELECT 
@@ -217,31 +215,15 @@ cfincmo,
 cfinfed,
 cfinplat
 FROM pooldataforweb
-WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < 0
 -- WHERE cusip = '36176ADT3'
 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC
 LIMIT 10;
 
 -- \COPY (SELECT cusip, currface - cfincmo - cfinfed - cfinplat AS minus, currface, cfincmo, cfinfed, cfinplat FROM pooldataforweb WHERE currface - cfincmo - cfinfed - cfinplat < 0 ORDER BY currface - cfincmo - cfinfed - cfinplat DESC) to 'C:\Users\micha\poolswithnegativecf' csv header;
 
---    cusip   |        minus        | currface |      cfincmo       | cfinfed |      cfinplat
--- -----------+---------------------+----------+--------------------+---------+--------------------
---  36203LT28 | -3841.4017134382557 |  7440.73 | 3841.4017134382557 |         |            7440.73
---  36223NXZ2 | -2680.1959419359664 |  8741.72 |  4834.588210295596 |         |   6587.32773164037
---  36224JNE8 |  -2656.876029199541 |  5881.88 | 3023.6441824657973 |         |  5515.111846733744
---  36203QC66 | -1810.0975383673122 |  9365.18 |  6316.519939545205 |         |  4858.757598822108
---  36203LXA5 | -1313.4591927918082 | 23226.49 |  4222.292700357089 |         |  20317.65649243472
---  36203GF99 |  -927.9350294592953 |  2075.22 | 1079.5603510853043 |         | 1923.5946783739907
---  36224SHV7 |  -687.6347739070698 | 19274.78 |   7232.60064858288 |         | 12729.814125324188
---  36224TLK4 |  -683.6613352460563 |  4484.58 |  1684.223554237509 |         |  3484.017781008547
---  36203NRN0 |  -649.5229411574037 |  8954.68 | 1371.4819445240169 |         |  8232.720996633387
---  36203AUX2 |  -529.5987533826465 |  8138.42 | 1663.1481065246062 |         |   7004.87064685804
---  36223WQM9 |  -455.3887092421064 |  3142.88 | 1491.4188115737143 |         | 2106.8498976683923
---  36224KR43 |  -360.9523204141201 |  3993.26 |  1023.587055855543 |         | 3330.6252645585773
---  36223MAP1 |  -89.31656076649733 |  5368.87 | 1391.8809781351727 |         | 4066.3055826313243
---  36203HCS8 | -46.424366571288374 |  8343.68 | 1913.1880610061396 |         |  6476.916305565149
---  36224X6X4 | -32.029593043346495 |  1495.53 | 419.30678068556733 |         | 1108.2528123577792
---  36203JHT7 |  -27.24848044711257 |  4574.24 |  3899.525631287242 |         |  701.9628491598703
+-- is the plats for 36179VKJ8 terminated or something..
+
 
 
 -- SELECT * 
