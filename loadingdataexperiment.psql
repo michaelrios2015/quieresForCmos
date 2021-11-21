@@ -1,3 +1,43 @@
+-- 11/20/21
+
+-- trying to stream poolfhavas
+--  so this worked fine need the temp table because I needed to add a date might be a way around that not sure 
+-- it's not a huge gain but I think a little faster and if I can do it for the delpoyed version it will save me a lot of time :)
+
+-- should probably explore the no conflict more but the primary key stops double data
+
+create temporary table tempfhava (cusip varchar, fha double precision, va double precision, rural double precision, indian double precision);
+
+-- change path
+\COPY tempfhava FROM 'C:\Users\micha\cmoDataPrettyForDatabase\data\pools\FHAVATest_20211111.csv' DELIMITER ',';
+
+-- need to change the month but other than that I don't 
+INSERT INTO poolfhavas (cusip, fha, va, rural, indian, date)
+SELECT cusip, fha, va, rural, indian, '2021-11-01'
+FROM tempfhava;
+
+
+
+
+-- trying to stream poolpredictions
+--  so this worked fine need the temp table because I needed to add a date might be a way around that not sure 
+-- it's not a huge gain but I think a little faster and if I can do it for the delpoyed version it will save me a lot of time :)
+
+-- should probably explore the no conflict more but the primary key stops double data
+
+create temporary table tempprediction (cusip varchar, totaloutstanding double precision, vpr double precision, vprnext double precision, cdr double precision, cdrnext double precision, cpr double precision, cprnext double precision );
+
+-- change path
+\COPY tempprediction FROM 'C:\Users\micha\cmoDataPrettyForDatabase\data\pools\ginnie_202111_monthly_predictions_roll.csv' DELIMITER ',' CSV HEADER;
+
+-- need to change the month but other than that I don't 
+INSERT INTO poolpredictions (cusip, "totalOutstanding", vpr, "vprNext", cdr, "cdrNext", cpr, "cprNext", date)
+SELECT cusip, totaloutstanding, vpr, vprnext, cdr, cdrnext, cpr, cprnext, '2021-11-01'
+FROM tempprediction;
+
+
+
+-- 11/14/21 or so 
 -- so these seem to work fine should slow expand to other 
 
 create temporary table cprandcdr (cusip varchar, cpr double precision, cdr double precision );

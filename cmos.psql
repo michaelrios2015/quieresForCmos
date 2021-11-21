@@ -1,3 +1,6 @@
+--  we do some data manipulation when piping in the cmos so will leave it the same for now
+
+
 ---- so just a simple way of making sure all the ofincmos are unique
 -- so it seems like each month 20 -30 are split in two and 
 
