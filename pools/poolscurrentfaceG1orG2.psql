@@ -243,6 +243,8 @@ WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat
 
 \COPY (SELECT * FROM g1poolswithcurrfloat) to 'C:\Users\micha\g1poolswithcurrfloat' csv header;
 
+ 
+
 
 -- just counting the ones that still have float 
 SELECT COUNT (*)

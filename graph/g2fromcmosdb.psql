@@ -46,6 +46,8 @@ FROM g1s;
 
 -- Seems to work :) loop in a loop sums up all the tradable float of g1 and g2 by cpr 
 
+-- should probably try and put the temp table in here to make my life a little easier 
+
 create or replace PROCEDURE get_float_sum(date DATE)
 language plpgsql
 as

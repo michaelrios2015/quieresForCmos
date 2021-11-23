@@ -1,5 +1,7 @@
 --  we do some data manipulation when piping in the cmos so will leave it the same for now
 
+--  so the cmo data first has to be piped in using javascript 
+
 
 ---- so just a simple way of making sure all the ofincmos are unique
 -- so it seems like each month 20 -30 are split in two and 
@@ -21,12 +23,13 @@ FROM ofincmos
 GROUP BY cmo, cusip, date;
 
 
+\set currentmonth 'date ''2021-10-01'''
 
 --puts my temp table into a real table 
 INSERT INTO uniqueofincmos (cmo, cusip, date, faceincmo)
 SELECT cmo, cusip, date, ofincmo
 FROM tempuniqueofincmos
-WHERE tempuniqueofincmos.date = '2021-09-01';
+WHERE tempuniqueofincmos.date = :currentmonth;
 
 
 ---------- attempts at updating cmo dates 

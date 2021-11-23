@@ -172,3 +172,157 @@ AND platinumbodies.date = :currentmonth;
 -- SET indicator = NULL
 -- AND istbaelig = NULL
 -- WHERE platinumbodies.date = '2021-07-01';
+
+
+-- NOW IN A PROCEDURE 11/22/21 it does make it easier 
+
+create or replace PROCEDURE istbaelig(currentmonth DATE)
+language plpgsql
+as
+$$
+declare
+   countofequals INTEGER := 0;
+   numberofplatinums INTEGER;
+begin
+
+    -- this gets me the platinums for the month I wanto to check
+    SELECT COUNT(*)
+    INTO numberofplatinums
+    FROM platinumbodies
+    WHERE platinumbodies.date = currentmonth;
+
+    RAISE NOTICE '%', numberofplatinums; 
+
+    WHILE numberofplatinums > countofequals loop
+
+        CREATE TEMP TABLE platcurr AS
+        SELECT 
+            platinums.cusip, 
+            platinums.name, 
+            platinumbodies.indicator, 
+            platinumbodies.istbaelig,
+            platinumbodies.date
+        FROM platinums
+        INNER JOIN platinumbodies
+        ON platinumbodies.cusip = platinums.cusip
+        WHERE platinumbodies.date = currentmonth;
+
+        -- this uses platcoll as a join table with pools and plats in the platinum
+
+        CREATE TEMP TABLE platistbaelig AS
+        SELECT 
+            platcolls.cusip, 
+            -- platcolls.active,
+            -- platcolls.born,
+            -- platcolls.terminated,
+            pools.name, 
+            pools.indicator, 
+            pools.istbaelig,
+            CASE
+                WHEN pools.indicator = 'X' THEN true
+                WHEN pools.indicator IS NULL THEN NULL
+                    ELSE false
+                END AS poolindicatorisx,
+            CASE
+                WHEN pools.indicator = 'M' THEN true
+                WHEN pools.indicator IS NULL THEN NULL
+                    ELSE false
+                END AS poolindicatorism,    
+            platcurr.cusip AS platcusip,
+            platcurr.indicator AS platindicator,
+            platcurr.istbaelig AS platistbaelig,
+            CASE
+                WHEN platcurr.indicator = 'X' THEN true
+                WHEN platcurr.indicator IS NULL THEN NULL
+                    ELSE false
+                END AS platindicatorisx,
+            CASE
+                WHEN platcurr.indicator = 'M' THEN true
+                WHEN platcurr.indicator IS NULL THEN NULL
+                    ELSE false
+                END AS platindicatorism
+        FROM platcolls
+        -- so we only look at the plats for that month
+        INNER JOIN platcurr AS currfilter
+        ON platcolls.cusip = currfilter.cusip
+        LEFT JOIN pools 
+        ON platcolls.poolname = pools.name
+        AND platcolls.indicator = pools.indicator
+        LEFT JOIN platcurr
+        ON platcolls.poolname = platcurr.name
+        ---can probably use born and terminated dates 
+        -- WHERE platcolls.active =  'A';
+        WHERE platcolls.born <= currentmonth
+        AND (platcolls.terminated > currentmonth OR platcolls.terminated IS NULL);
+
+        -- LIMIT 10;
+        -------------------
+
+        -- slimmed down version now accomodates those with no pools
+
+        CREATE TEMP TABLE platistbaeligoutput AS
+        SELECT 
+            cusip, 
+            bool_and(COALESCE(platistbaelig.istbaelig, true) AND COALESCE(platistbaelig.platistbaelig, true)) AS bothistbaelig,
+            bool_and(COALESCE(platistbaelig.poolindicatorisx, true)  AND COALESCE(platistbaelig.platindicatorisx, true)) AS bothindicatorisx,
+            bool_and(COALESCE(platistbaelig.poolindicatorism, true)  AND COALESCE(platistbaelig.platindicatorism, true)) AS bothindicatorism
+        FROM platistbaelig
+        GROUP BY platistbaelig.cusip;
+
+
+        --- putting the logic into sql 
+        CREATE TEMP TABLE indicatorsandtbaelig AS
+        SELECT 
+            *,
+            CASE 
+                WHEN bothistbaelig IS TRUE AND (bothindicatorisx IS NOT TRUE OR bothindicatorism IS NOT TRUE) THEN TRUE
+                WHEN bothistbaelig IS FALSE AND (bothindicatorisx IS NOT TRUE OR bothindicatorism IS NOT TRUE) THEN FALSE
+            END AS istbaelig,
+            CASE 
+                WHEN bothindicatorisx IS TRUE AND bothindicatorism IS NOT TRUE THEN 'X'
+                WHEN bothindicatorisx IS NOT TRUE AND bothindicatorism IS TRUE THEN 'M'
+                WHEN bothindicatorisx IS NOT TRUE OR bothindicatorism IS NOT TRUE THEN 'C'
+            END AS indicator  
+        FROM platistbaeligoutput;
+
+        -- WHERE cusip = '36241LUK0'
+
+        -- COUNTS the differnce between what i just calculated and what i had in platinum bodies 
+        -- SHOULD let me know when to stop, so first time I run with null values get zero after that works great  
+
+        SELECT COUNT(*)
+        INTO countofequals 
+        FROM indicatorsandtbaelig
+        INNER JOIN platinumbodies
+        ON indicatorsandtbaelig.cusip = platinumbodies.cusip
+        WHERE platinumbodies.date = currentmonth
+        AND (platinumbodies.indicator = indicatorsandtbaelig.indicator
+        OR platinumbodies.istbaelig = indicatorsandtbaelig.istbaelig);
+
+        RAISE NOTICE '%', countofequals; 
+
+        ----------updating platinumbodies
+
+        UPDATE platinumbodies
+        SET indicator = indicatorsandtbaelig.indicator,
+            istbaelig = indicatorsandtbaelig.istbaelig
+        FROM indicatorsandtbaelig
+        WHERE indicatorsandtbaelig.cusip = platinumbodies.cusip
+        AND platinumbodies.date = currentmonth;
+
+        DROP TABLE platcurr, platistbaelig, platistbaeligoutput, indicatorsandtbaelig;       
+    
+    END loop; 
+
+end;
+
+$$;
+
+-- SEEMS to work fine :)
+
+call istbaelig ('2021-10-01');
+
+UPDATE platinumbodies
+SET indicator = NULL,
+    istbaelig = NULL
+WHERE platinumbodies.date = '2021-10-01';
