@@ -25,6 +25,8 @@ declare
    numberofplatinums INTEGER;
 begin
 
+     DROP TABLE IF EXISTS platcurr, platistbaelig, platistbaeligoutput, indicatorsandtbaelig;  
+
     -- this gets me the platinums for the month I wanto to check
     SELECT COUNT(*)
     INTO numberofplatinums

@@ -1,0 +1,253 @@
+-- 11/24/21 NOW IN A STORED PROCEDURE 
+
+-- NOW USES VARIABLES can work for g1 or g2
+
+-- SET TO SEPTEMBER DATA 10/24/21
+
+-- copied from g2 on 10/17 just going to modify it slightly I am sure there is a way to use variable
+
+-- seems to
+
+-- This is what I used to get the pool data should be able to get platinum data with a bit of modification
+-- it was working for pools on 10/10/21
+
+-- TEMP TABLES 
+
+--- SO I SHOULD BE ABLE To update the dates add the temp tables and run my query, yes!!! 
+-- combining platinum and platinumbodies getting what I need from both
+-- this is month M
+-- So we want two reports one for pools with Type = "SP' and Indicator = 'M" G2
+-- and one with Type = "SP' and Indicator = 'X" G1
+
+
+-- G1: G1 and one with Type = "SF' and Indicator = 'X" G1
+
+
+-- G2: G2 and one with Type = "SF' and Indicator = 'M" G2
+
+
+
+create or replace PROCEDURE outputplats(currentmonth DATE, pastmonth DATE, feddate DATE, _indicator VARCHAR)
+language plpgsql
+as
+$$
+declare
+   numberofnegatives INTEGER;
+begin
+
+  DROP TABLE IF EXISTS platscurr, pastactualcpr, pastactualcdr, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
+
+  -- ONLY TBA Elig ones 
+  CREATE TEMP TABLE platscurr AS
+  SELECT   
+      platinums.cusip,
+      platinums.name,
+      platinumbodies.indicator,
+      platinums.type,
+      platinums.issuedate,
+      platinums.originalface,
+      platinumbodies.remainingbalance,
+      -- calculating the factor on our own
+      platinumbodies.remainingbalance / platinums.originalface AS factor, 
+      platinumbodies.interestrate,
+      platinumbodies.gwac,
+      platinumbodies.wam,
+      platinumbodies.wala,
+      platinumbodies.cpr,
+      platinumbodies.predictedcpr,
+      platinumbodies.predictedcprnext,
+      platinumbodies.cdr,
+      platinumbodies.predictedcdr,
+      platinumbodies.predictedcdrnext,
+      platinumbodies.istbaelig,
+      platinumbodies.date 
+  FROM platinums 
+  INNER JOIN platinumbodies
+  ON platinums.cusip = platinumbodies.cusip 
+  WHERE platinumbodies.date =currentmonth
+  AND platinumbodies.indicator = _indicator
+  AND platinums.type = 'SP'
+  AND platinumbodies.istbaelig IS TRUE;
+  -- LIMIT 3;
+
+
+  -- will need actual cprs not sure if this is the best way to get it...
+
+  CREATE TEMP TABLE pastactualcpr AS
+  SELECT *
+  FROM platinumbodies
+  WHERE platinumbodies.date =pastmonth;
+
+
+  -- will need actual cdrs not sure if this is the best way to get it...
+  CREATE TEMP TABLE pastactualcdr AS
+  SELECT * 
+  FROM platinumbodies
+  WHERE platinumbodies.date =pastmonth;
+  -- LIMIT 1;
+
+
+  -- Does this apply to platinums?? not sure
+  -- ditto for poolfhavas
+  -- I think I just use month M
+  CREATE TEMP TABLE poolfhavascurr AS
+  SELECT *
+  FROM poolfhavas
+  WHERE poolfhavas.date =currentmonth;
+
+
+  -- SELECT * FROM pools INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip LIMIT 2; 
+
+  -- the temp table that sums up original face in platinum them and groups them by poolname (with platinums we 
+  -- only use poolname as we made our own indicator)
+  -- which we will use to join to our plat table, so this is fine but need a date thing does it matter if it is 
+  --active or not.. going to assumme it does not
+
+  -- I think this is measured in pennies
+  CREATE TEMP TABLE ofinplatinum AS
+  SELECT 
+      count(*),
+      poolname,
+      SUM(faceinplatinum) as ofinplat
+  FROM platcolls
+  WHERE born <=currentmonth
+  -- LIMIT 4;
+  GROUP BY
+      poolname;
+      
+  -- adding original face in cmos 
+
+  -- TEMP TABLE 
+  -- not really sure how date is being used..... allmost all cmos has not been updated since june..
+  ---NEEDS TO BE CHANGED
+
+  -- MONTH M-1 though month M is ok too
+  CREATE TEMP TABLE ofpoolincmo AS
+  SELECT
+      cusip,
+      -- date,
+      -- COUNT (*),
+      SUM(faceincmo) AS ofincmo
+  FROM
+      uniqueofincmos
+  WHERE date <= pastmonth
+  AND ( collapsed >  pastmonth OR collapsed IS NULL) 
+  GROUP BY
+      cusip;
+  --     date
+  -- ORDER BY date DESC
+  -- LIMIT 2;
+
+  ----now to add feds and we are good, the fed uses current face so we can just keep it like that 
+  -- Switched back to june...
+
+  --temp table, fed holdings has only one per pool?? I guess so 
+  -- SO Month M + 1.5
+  CREATE TEMP TABLE fedholdingscurr AS
+  SELECT * 
+  FROM fedholdings
+  WHERE fedholdings.asofdate = feddate;
+
+
+    
+  -- joining it to other stuff 
+  --this just needs to be turned into a copy statement and I need to check on which data we want 
+  -- Actual CDR should be added might hav it not sure 
+  -- I think this works 10/11/21
+  CREATE TEMP TABLE platdataforweb AS
+  SELECT
+    platscurr.cusip,
+    platscurr.name,
+    platscurr.indicator,
+    platscurr.type,
+    platscurr.issuedate,
+    platscurr.remainingbalance AS currface,
+    --   platscurr.factor,
+    --   ofpoolincmo.ofincmo,
+    ofpoolincmo.ofincmo * platscurr.factor AS cfincmo,
+    fedholdingscurr.currentfacevalue AS cfinfed,
+    --   ofinplatinum.ofinplat,
+    (ofinplatinum.ofinplat/100) * platscurr.factor AS cfinplat,
+    platscurr.interestrate as coupon,
+    platscurr.gwac, 
+    platscurr.wala,
+    platscurr.wam,
+    poolfhavascurr.va,
+    pastactualcpr.cpr AS pastactcpr,
+    platscurr.cpr,
+    platscurr.predictedcpr AS cprprediction,
+    platscurr.predictedcprnext AS cprpredictionnext,
+    pastactualcdr.cdr AS pastactcdr,
+    platscurr.cdr,
+    platscurr.predictedcdr AS cdrprediction,
+    platscurr.predictedcdrnext AS cdrpredictionnext,
+    platscurr.date
+  FROM
+    platscurr
+    LEFT JOIN pastactualcpr ON (platscurr.cusip = pastactualcpr.cusip)
+    LEFT JOIN pastactualcdr ON (platscurr.cusip = pastactualcdr.cusip)
+    LEFT JOIN poolfhavascurr ON (platscurr.cusip = poolfhavascurr.cusip)
+    LEFT JOIN ofinplatinum 
+      ON platscurr.name = ofinplatinum.poolname
+    LEFT JOIN ofpoolincmo ON platscurr.cusip = ofpoolincmo.cusip 
+    LEFT JOIN fedholdingscurr ON platscurr.cusip = fedholdingscurr.cusip;  
+  --   WHERE poolscurr.cusip = '36202DVX6'  
+  -- WHERE fedholdingscurr.currentfacevalue IS NOT NULL
+  -- LIMIT
+  --   10;
+
+  CREATE TEMP TABLE g1platswithcurrfloat AS
+  SELECT *
+  FROM platdataforweb
+  WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1;
+
+  EXECUTE 'copy (SELECT * FROM g1platswithcurrfloat) to ''C:\Users\Public\ginnieplatswithcurrfloat' || _indicator || ''' csv header;';
+
+  -- checking for minus float
+  CREATE TEMP TABLE platswithnegativefloat AS
+  SELECT 
+  cusip,
+  currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS minus,
+  currface,
+  cfincmo,
+  cfinfed,
+  cfinplat
+  FROM platdataforweb
+  WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1;
+
+  SELECT COUNT (*)
+  INTO numberofnegatives
+  FROM platswithnegativefloat;
+
+  RAISE NOTICE '%', numberofnegatives; 
+
+
+  EXECUTE 'COPY (SELECT * FROM platswithnegativefloat) to ''C:\Users\Public\ginnieplatswithnegativefloat' || _indicator || ''' csv header';
+
+  DROP TABLE IF EXISTS platscurr, pastactualcpr, pastactualcdr, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
+
+
+end;
+
+$$;
+
+-- SEEMS to work fine :)
+
+call outputplats('2021-10-01', '2021-09-01', '2021-11-11', 'M');
+
+
+call outputplats('2021-10-01', '2021-09-01', '2021-11-11', 'X');
+
+
+
+   cusip   |       minus        |  currface   |      cfincmo      | cfinfed | cfinplat
+-----------+--------------------+-------------+-------------------+---------+----------
+ 36241LCV6 | -20922795.39723496 | 20923597.67 | 41846393.06723496 |         |
+
+SELECT * 
+FROM uniqueofincmos 
+WHERE cusip IN ( '36241LCV6')
+AND collapsed IS NULL 
+ORDER BY cmo;
+
+

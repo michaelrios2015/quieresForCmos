@@ -1,0 +1,28 @@
+create or replace PROCEDURE processplatdata(currentmonth DATE, pastmonth DATE)
+language plpgsql
+as
+$$
+declare
+
+begin
+
+    call istbaelig (currentmonth);
+
+    call actualcpr(currentmonth, pastmonth); 
+
+    call predictedcpr(currentmonth, pastmonth); 
+
+    call predictednextcpr(currentmonth, pastmonth);
+
+    call actualcdr(currentmonth, pastmonth); 
+
+    call predictedcdr(currentmonth, pastmonth); 
+
+    call predictedcdrnext(currentmonth, pastmonth);
+
+
+end; 
+
+$$;
+
+call processplatdata('2021-10-01', '2021-09-01');

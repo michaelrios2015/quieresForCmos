@@ -206,7 +206,7 @@ INTO TEMP TABLE g1platswithcurrfloat
 FROM platdataforweb
 WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1;
 
-\COPY (SELECT * FROM g1platswithcurrfloat) to 'C:\Users\micha\g1platswithcurrfloat' csv header;
+\COPY (SELECT * FROM g1platswithcurrfloat) to 'C:\Users\micha\ginnieplatswithcurrfloat' csv header;
 
 
 -- checking for minus float
@@ -218,8 +218,14 @@ currface,
 cfincmo,
 cfinfed,
 cfinplat
+INTO TEMP TABLE platswithnegativefloat
 FROM platdataforweb
 WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1;
+
+\COPY (SELECT * FROM platswithnegativefloat) to 'C:\Users\micha\ginnieplatswithnegativefloat' csv header;
+
+
+
 
    cusip   |       minus        |  currface   |      cfincmo      | cfinfed | cfinplat
 -----------+--------------------+-------------+-------------------+---------+----------

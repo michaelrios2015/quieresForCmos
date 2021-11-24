@@ -40,7 +40,7 @@
 
 
 
-create or replace PROCEDURE predictedcdr(currentmonth DATE, pastmonth DATE)
+create or replace PROCEDURE predictedcdrnext(currentmonth DATE, pastmonth DATE)
 language plpgsql
 as
 $$
@@ -151,7 +151,7 @@ begin
         currpoolscpr.indicator,
         currpoolscpr.originalface,
         currpoolscpr."remainingBalance",
-        poolpredictions.cdr AS cpr
+        poolpredictions."cdrNext" AS cpr
     FROM
         currpoolscpr
     -- I guess it needs to be inner join becuase we need a cpr??
@@ -189,7 +189,7 @@ begin
         CREATE TEMP TABLE platcpr AS
         SELECT 
             platinumbodies.cusip,
-            platinumbodies.predictedcdr AS cpr
+            platinumbodies.predictedcdrnext AS cpr
         FROM  platinumbodies
         WHERE date = currentmonth;
 
@@ -319,7 +319,7 @@ begin
         FROM stepfour
         INNER JOIN platinumbodies
         ON stepfour.platinumcusip = platinumbodies.cusip
-        WHERE stepfour.cpr = platinumbodies.predictedcdr
+        WHERE stepfour.cpr = platinumbodies.predictedcdrnext
         AND platinumbodies.date =  currentmonth;
 
         RAISE NOTICE '%', countofequals; 
@@ -327,7 +327,7 @@ begin
         --- This will update platinum bodies cprs now with m + 1
 
         UPDATE platinumbodies
-        SET predictedcdr = stepfour.cpr
+        SET predictedcdrnext = stepfour.cpr
         FROM stepfour
         WHERE stepfour.platinumcusip = platinumbodies.cusip
         AND platinumbodies.date =  currentmonth;
@@ -352,7 +352,7 @@ end;
 $$;
 
 
-call predictedcdr('2021-10-01', '2021-09-01');
+call predictedcdrnext('2021-10-01', '2021-09-01');
 
 --- this can erease all the cprs
 UPDATE platinumbodies
