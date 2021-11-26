@@ -1,0 +1,133 @@
+-- previous month of platinum is loaded as platinums current month... we just need something
+
+-- we erease the remaining balance and factor 
+
+-- THIS IS DONE BEFORE we do the called procedure
+
+UPDATE platinumbodies
+SET factor = 0,
+    remainingbalance = 0
+WHERE date = '2021-10-01';
+
+
+DELETE FROM platinumbodies
+WHERE date = '2021-10-01';
+
+
+
+
+
+---------------------------------------------------------------------------
+
+
+create or replace PROCEDURE platinumsfactorearly(currentmonth DATE)
+language plpgsql
+as
+$$
+declare
+   countofequals INTEGER := 0;
+   numberofplatinums INTEGER;
+begin
+
+    DROP TABLE IF EXISTS currpools, currplats, currfacepoolandplat, platcurrface;  
+
+    --  we get the factor for the pools
+    CREATE TEMP TABLE currpools AS
+    SELECT
+        pools.cusip,
+        name,
+        indicator,
+        originalface,
+        poolbodies."remainingBalance",
+        poolbodies."remainingBalance" / originalface AS factor
+    FROM pools
+    INNER JOIN poolbodies
+    ON pools.cusip = poolbodies.cusip
+    WHERE poolbodies.date = currentmonth;
+
+
+    ---- we get platinum data
+    CREATE TEMP TABLE currplats AS
+    SELECT
+        platinums.cusip,
+        name,
+        originalface,
+        platinumbodies.remainingbalance,
+        platinumbodies.remainingbalance / originalface AS factor
+    FROM platinums
+    INNER JOIN platinumbodies
+    ON platinums.cusip = platinumbodies.cusip
+    WHERE platinumbodies.date = currentmonth;
+    -- LIMIT 3;
+
+
+    -- this gets me the platinums for the month I wanto to check
+    SELECT COUNT(*)
+    INTO numberofplatinums
+    FROM platinumbodies
+    WHERE platinumbodies.date = currentmonth;
+
+    RAISE NOTICE '%', numberofplatinums; 
+
+    WHILE numberofplatinums > countofequals loop
+
+        -- we use platcolls to check for face in platinum and mutiple it by the factor to get current face 
+
+        CREATE TEMP TABLE currfacepoolandplat AS
+        SELECT 
+            platcolls.cusip,
+            (faceinplatinum / 100) * currpools.factor AS currfacepool,
+            (faceinplatinum / 100) * currplats.factor AS currfaceplat    
+        FROM platcolls
+        LEFT JOIN currpools
+        ON platcolls.poolname = currpools.name
+        AND platcolls.indicator = currpools.indicator
+        LEFT JOIN currplats
+        ON platcolls.poolname = currplats.name;
+        -- LIMIT 3;
+
+    -- we sum the current face by platinum cusip
+
+        CREATE TEMP TABLE platcurrface AS
+        SELECT
+            cusip,
+            SUM(COALESCE(currfacepool, 0)) + SUM(COALESCE(currfaceplat, 0)) AS currentface    
+        FROM currfacepoolandplat
+        GROUP BY cusip;
+        -- LIMIT 3; 
+
+        SELECT COUNT(*)
+        INTO countofequals
+        FROM platcurrface
+        INNER JOIN currplats
+        ON platcurrface.cusip = currplats.cusip
+        WHERE platcurrface.currentface = currplats.remainingbalance;
+
+        RAISE NOTICE '%', countofequals; 
+
+        UPDATE currplats
+        SET remainingbalance = currentface,
+            factor = currentface / originalface 
+        FROM platcurrface 
+        WHERE currplats.cusip = platcurrface.cusip;
+
+        DROP TABLE currfacepoolandplat, platcurrface;
+
+    END loop; 
+
+    UPDATE platinumbodies
+    SET remainingbalance = currplats.remainingbalance,
+        factor = currplats.factor 
+    FROM currplats 
+    WHERE currplats.cusip = platinumbodies.cusip
+    AND platinumbodies.date = currentmonth;    
+
+    DROP TABLE IF EXISTS currpools, currplats, currfacepoolandplat, platcurrface;  
+
+end;
+
+$$;
+
+-- SEEMS to work fine :)
+
+call platinumsfactorearly('2021-10-01');

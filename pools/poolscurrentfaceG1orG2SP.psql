@@ -13,18 +13,6 @@
 
 -- now with variables
 
-\set currentmonth 'date ''2021-10-01'''
-
-\set pastmonth 'date ''2021-09-01'''
-
-\set feddate 'date ''2021-11-10'''
-
--- G1 G1 and one with Type = "SF' and Indicator = 'X" G1
--- \set indicator '\'X\'' 
-
--- G2 G2 and one with Type = "SF' and Indicator = 'M" G2
-
-\set indicator '\'M\'' 
 
 create or replace PROCEDURE outputpools(currentmonth DATE, pastmonth DATE, feddate DATE, _indicator VARCHAR)
 language plpgsql
@@ -60,7 +48,7 @@ begin
   INNER JOIN poolbodies
   ON pools.cusip = poolbodies.cusip 
   WHERE poolbodies.date =  currentmonth
-  AND pools.indicator =  indicator
+  AND pools.indicator =  _indicator
   AND pools.type = 'SF'
   AND pools.istbaelig IS TRUE;
   -- LIMIT 10;
@@ -217,38 +205,6 @@ begin
 
   -- this gets all the pools, eventually will want to limit it to pools with float 
 
-  ---------pools with negative current face 
-  -- CREATE TEMP TABLE platscurr AS
-
-
-  -- SELECT 
-  -- -- COUNT(*)
-  -- cusip,
-  -- currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS minus,
-  -- currface,
-  -- cfincmo,
-  -- cfinfed,
-  -- cfinplat
-  -- FROM pooldataforweb
-  -- WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1
-  -- -- WHERE cusip = '36176ADT3'
-  -- ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC
-  -- LIMIT 10;
-
-  -- \COPY (SELECT cusip, currface - cfincmo - cfinfed - cfinplat AS minus, currface, cfincmo, cfinfed, cfinplat FROM pooldataforweb WHERE currface - cfincmo - cfinfed - cfinplat < 0 ORDER BY currface - cfincmo - cfinfed - cfinplat DESC) to 'C:\Users\micha\poolswithnegativecf' csv header;
-
-  -- is the plats for 36179VKJ8 terminated or something..
-
-
-
-  -- SELECT * 
-  -- FROM uniqueofincmos 
-  -- WHERE cusip IN ( '36203LT28', '36223NXZ2', '36224JNE8',  
-  --   '36203QC66', '36203LXA5', '36203GF99',  '36224SHV7', '36224TLK4', '36203NRN0', 
-  --   '36203AUX2', '36223WQM9', '36224KR43', '36223MAP1', '36203HCS8', '36224X6X4', '36203JHT7' )
-  -- AND collapsed IS NULL 
-  -- ORDER BY cmo;
-
 
   -- might want to change some of the names at some point
   CREATE TEMP TABLE g1poolswithcurrfloat AS
@@ -258,7 +214,30 @@ begin
 
   -- \COPY (SELECT * FROM g1poolswithcurrfloat) to 'C:\Users\micha\g1poolswithcurrfloat' csv header;
 
-  EXECUTE 'COPY (SELECT * FROM g1poolswithcurrfloat) to ''C:\Users\Public\g1poolswithcurrfloat' || _indicator || ''' csv header';
+  EXECUTE 'COPY (SELECT * FROM g1poolswithcurrfloat) to ''C:\Users\Public\poolswithcurrfloat' || _indicator || ''' csv header';
+
+  ---------pools with negative current face 
+  CREATE TEMP TABLE poolswithnegativefloat AS
+  SELECT 
+    cusip,
+    currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS minus,
+    currface,
+    cfincmo,
+    cfinfed,
+    cfinplat
+  FROM pooldataforweb
+  WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1
+  ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC;
+
+  EXECUTE 'COPY (SELECT * FROM poolswithnegativefloat) to ''C:\Users\Public\poolswithnegativefloat' || _indicator || ''' csv header';
+
+  SELECT COUNT(*)
+  INTO  numberofnegatives 
+  FROM poolswithnegativefloat;
+
+  -- is the plats for 36179VKJ8 terminated or something..
+
+  RAISE NOTICE '%', numberofnegatives; 
 
   DROP TABLE IF EXISTS poolscurr, currentactualcpr, pastactualcpr, currentactualcdr, pastactualcdr, poolpredictionscurr, 
     poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, pooldataforweb, g1poolswithcurrfloat, poolswithnegativefloat;
@@ -270,6 +249,19 @@ $$;
 
 
 call outputpools('2021-10-01', '2021-09-01', '2021-11-11', 'M');
+
+
+call outputpools('2021-10-01', '2021-09-01', '2021-11-11', 'X');
+
+
+  -- SELECT * 
+  -- FROM uniqueofincmos 
+  -- WHERE cusip IN ( '36203LT28', '36223NXZ2', '36224JNE8',  
+  --   '36203QC66', '36203LXA5', '36203GF99',  '36224SHV7', '36224TLK4', '36203NRN0', 
+  --   '36203AUX2', '36223WQM9', '36224KR43', '36223MAP1', '36203HCS8', '36224X6X4', '36203JHT7' )
+  -- AND collapsed IS NULL 
+  -- ORDER BY cmo;
+
 
 -- just counting the ones that still have float 
 SELECT COUNT (*)

@@ -56,82 +56,104 @@ declare
    couponval real := 1;
 begin
 
-WHILE couponval < 10 loop
+    DROP TABLE IF EXISTS g2poolswithcurrfloat, g1poolswithcurrfloat;
 
-declare
-   sumoffloatactual double precision;
-   sumoffloatpredicted double precision;
-   cprval real := 1;
-begin
+    CREATE TEMP TABLE g2poolswithcurrfloat AS
+    SELECT 
+        coupon,
+        curractualcpr,
+        cprprediction,
+        COALESCE(currentface, 0) - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float
+    FROM pools;
 
-       SELECT
-            COALESCE(ROUND (SUM(float)/1000000), 0) 
+
+
+    --- and this is g1 pools and plats ...
+
+    CREATE TEMP TABLE g1poolswithcurrfloat AS
+    SELECT 
+        coupon,
+        curractualcpr,
+        cprprediction,
+        COALESCE(currentface, 0) - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float
+    FROM g1s;
+
+
+    WHILE couponval < 10 loop
+
+        declare
+        sumoffloatactual double precision;
+        sumoffloatpredicted double precision;
+        cprval real := 1;
+        begin
+
+            SELECT
+                COALESCE(ROUND (SUM(float)/1000000), 0) 
             INTO sumoffloatactual
             FROM g2poolswithcurrfloat
             WHERE coupon = couponval;
 
-
-      INSERT INTO sumoffloats (coupon, cpr, floatsumactual, floatsumpredicted, gtype, date)
+            INSERT INTO sumoffloats (coupon, cpr, floatsumactual, floatsumpredicted, gtype, date)
             VALUES(couponval, 0 , sumoffloatactual, sumoffloatactual, 'g2s', date);
-
-    
-       SELECT
-            COALESCE(ROUND (SUM(float)/1000000), 0) 
+            
+            SELECT
+                COALESCE(ROUND (SUM(float)/1000000), 0) 
             INTO sumoffloatactual
             FROM g1poolswithcurrfloat
             WHERE coupon = couponval;
 
-
-      INSERT INTO sumoffloats (coupon, cpr, floatsumactual, floatsumpredicted, gtype, date)
-            VALUES(couponval, 0 , sumoffloatactual, sumoffloatactual, 'g1s', date);
-
-
-    WHILE cprval < 100 loop
-        SELECT
-            COALESCE(ROUND (SUM(float)/1000000), 0) 
-            INTO sumoffloatactual
-            FROM g2poolswithcurrfloat
-            WHERE curractualcpr >= cprval/100
-            AND coupon = couponval;
-
-        SELECT
-            COALESCE(ROUND (SUM(float)/1000000), 0) 
-            INTO sumoffloatpredicted
-            FROM g2poolswithcurrfloat
-            WHERE cprprediction >= cprval/100
-            AND coupon = couponval;
-
-        
-        
             INSERT INTO sumoffloats (coupon, cpr, floatsumactual, floatsumpredicted, gtype, date)
-            VALUES(couponval, cprval/100, sumoffloatactual, sumoffloatpredicted, 'g2s', date);
+                    VALUES(couponval, 0 , sumoffloatactual, sumoffloatactual, 'g1s', date);
 
-     SELECT
-            COALESCE(ROUND (SUM(float)/1000000), 0) 
-            INTO sumoffloatactual
-            FROM g1poolswithcurrfloat
-            WHERE curractualcpr >= cprval/100
-            AND coupon = couponval;
 
-        SELECT
-            COALESCE(ROUND (SUM(float)/1000000), 0) 
-            INTO sumoffloatpredicted
-            FROM g1poolswithcurrfloat
-            WHERE cprprediction >= cprval/100
-            AND coupon = couponval;
+            WHILE cprval < 100 loop
+                SELECT
+                    COALESCE(ROUND (SUM(float)/1000000), 0) 
+                    INTO sumoffloatactual
+                    FROM g2poolswithcurrfloat
+                    WHERE curractualcpr >= cprval/100
+                    AND coupon = couponval;
 
-        
-        
-            INSERT INTO sumoffloats (coupon, cpr, floatsumactual, floatsumpredicted, gtype, date)
-            VALUES(couponval, cprval/100, sumoffloatactual, sumoffloatpredicted, 'g1s', date);
+                SELECT
+                    COALESCE(ROUND (SUM(float)/1000000), 0) 
+                    INTO sumoffloatpredicted
+                    FROM g2poolswithcurrfloat
+                    WHERE cprprediction >= cprval/100
+                    AND coupon = couponval;
 
-        cprval := cprval + 1;
+                
+                
+                    INSERT INTO sumoffloats (coupon, cpr, floatsumactual, floatsumpredicted, gtype, date)
+                    VALUES(couponval, cprval/100, sumoffloatactual, sumoffloatpredicted, 'g2s', date);
+
+                SELECT
+                    COALESCE(ROUND (SUM(float)/1000000), 0) 
+                    INTO sumoffloatactual
+                    FROM g1poolswithcurrfloat
+                    WHERE curractualcpr >= cprval/100
+                    AND coupon = couponval;
+
+                SELECT
+                    COALESCE(ROUND (SUM(float)/1000000), 0) 
+                    INTO sumoffloatpredicted
+                    FROM g1poolswithcurrfloat
+                    WHERE cprprediction >= cprval/100
+                    AND coupon = couponval;
+               
+                
+                    INSERT INTO sumoffloats (coupon, cpr, floatsumactual, floatsumpredicted, gtype, date)
+                    VALUES(couponval, cprval/100, sumoffloatactual, sumoffloatpredicted, 'g1s', date);
+
+                cprval := cprval + 1;
+            END loop; 
+
+        end;
+
+        couponval := couponval + .5;
+    
     END loop; 
 
-end;
-
-       couponval := couponval + .5;
-    END loop; 
+    DROP TABLE IF EXISTS g2poolswithcurrfloat, g1poolswithcurrfloat;
 
 end;
 

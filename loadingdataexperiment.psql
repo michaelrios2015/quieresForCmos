@@ -52,3 +52,17 @@ FROM cprandcdr;
 INSERT INTO actualcdrs (cusip, cdr, date)
 SELECT cusip, cdr/100, '2021-10-01'
 FROM cprandcdr;
+
+
+
+--11/24/21 hoping to pipe the data from files straight to cmo database (for the deployed site)
+
+TRUNCATE g1s, pools;
+
+\COPY pools FROM 'C:\Users\micha\cmoDataPretty\data\pools\G2pools_202110.csv' DELIMITER ','  CSV HEADER;
+
+\COPY pools FROM 'C:\Users\micha\cmoDataPretty\data\platinums\G2plats_202110.csv' DELIMITER ','  CSV HEADER;
+
+\COPY g1s FROM 'C:\Users\micha\cmoDataPretty\data\pools\G1pools_202110.csv' DELIMITER ','  CSV HEADER;
+
+\COPY g1s FROM 'C:\Users\micha\cmoDataPretty\data\platinums\G1plats_202110.csv' DELIMITER ','  CSV HEADER;
