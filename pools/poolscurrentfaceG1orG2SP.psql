@@ -23,7 +23,7 @@ declare
 begin
 
   DROP TABLE IF EXISTS poolscurr, currentactualcpr, pastactualcpr, currentactualcdr, pastactualcdr, poolpredictionscurr, 
-    poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, pooldataforweb, g1poolswithcurrfloat, poolswithnegativefloat;  
+    poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, pooldataforweb, g1poolswithcurrfloat, poolswithnegativefloat, poolpastpredictions;  
 
   -- ONLY TBA Elig ones 
   
@@ -53,6 +53,7 @@ begin
   AND pools.istbaelig IS TRUE;
   -- LIMIT 10;
 
+  RAISE NOTICE 'CREATED TEMP TABLE'; 
 
   -- will need actual cprs not sure if this is the best way to get it...
   CREATE TEMP TABLE currentactualcpr AS
@@ -61,11 +62,14 @@ begin
   WHERE actualcprs.date =  currentmonth;
   -- LIMIT 1;
 
+  RAISE NOTICE 'CREATED TEMP TABLE';
+
   CREATE TEMP TABLE pastactualcpr AS
   SELECT *
   FROM actualcprs
   WHERE actualcprs.date =  pastmonth;
 
+  RAISE NOTICE 'CREATED TEMP TABLE';
 
   -- will need actual cdrs not sure if this is the best way to get it...
   
@@ -75,11 +79,15 @@ begin
   WHERE actualcdrs.date =  currentmonth;
   -- LIMIT 1;
 
+  RAISE NOTICE 'CREATED TEMP TABLE';
+
   CREATE TEMP TABLE pastactualcdr AS
   SELECT *
   FROM actualcdrs
   WHERE actualcdrs.date =  pastmonth;
   -- LIMIT 1;
+
+  RAISE NOTICE 'CREATED TEMP TABLE';
 
   -- Adding pool predictions we will use cpr, cprnext, cdr and cdrnext this will be the month M and M+1
 
@@ -88,6 +96,14 @@ begin
   FROM poolpredictions
   WHERE poolpredictions.date =  currentmonth;
 
+  RAISE NOTICE 'CREATED TEMP TABLE';
+
+  CREATE TEMP TABLE poolpastpredictions AS
+  SELECT *
+  FROM poolpredictions
+  WHERE poolpredictions.date =  pastmonth;
+
+  RAISE NOTICE 'CREATED TEMP TABLE';
   -- ditto for poolfhavas
   -- I think I just use month M
 
@@ -96,7 +112,7 @@ begin
   FROM poolfhavas
   WHERE poolfhavas.date =  currentmonth;
 
-
+  RAISE NOTICE 'CREATED TEMP TABLE';
   -- SELECT * FROM pools INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip LIMIT 2; 
 
   -- the temp table that sums up original face in platinum them and groups them by poolname and indicator
@@ -118,6 +134,7 @@ begin
       poolname,
       indicator;
 
+  RAISE NOTICE 'CREATED TEMP TABLE';
   -- adding original face in cmos 
 
   -- think i need more cmos 10/24/21
@@ -145,12 +162,14 @@ begin
   --temp table, fed holdings has only one per pool?? I guess so 
   -- SO Month M + 1.5
   
+  RAISE NOTICE 'CREATED TEMP TABLE';
+
   CREATE TEMP TABLE fedholdingscurr AS
   SELECT * 
   FROM fedholdings
   WHERE fedholdings.asofdate =  feddate;
 
-
+  RAISE NOTICE 'PUTTING IT ALL TOGTHER';
     
   -- joining it to other stuff 
   --this just needs to be turned into a copy statement and I need to check on which data we want 
@@ -186,8 +205,8 @@ begin
     poolscurr.date
   FROM
     poolscurr
-    LEFT JOIN pastactualcpr ON (poolscurr.cusip = pastactualcpr.cusip)
-    LEFT JOIN currentactualcpr ON (poolscurr.cusip = currentactualcpr.cusip)
+  LEFT JOIN pastactualcpr ON (poolscurr.cusip = pastactualcpr.cusip)
+  LEFT JOIN currentactualcpr ON (poolscurr.cusip = currentactualcpr.cusip)
     LEFT JOIN pastactualcdr ON (poolscurr.cusip = pastactualcdr.cusip)
     LEFT JOIN currentactualcdr ON (poolscurr.cusip = currentactualcdr.cusip)
     LEFT JOIN poolpredictionscurr ON (poolscurr.cusip = poolpredictionscurr.cusip)
@@ -205,11 +224,37 @@ begin
 
   -- this gets all the pools, eventually will want to limit it to pools with float 
 
+  RAISE NOTICE 'WEEDING OUT DEAD ONES';
 
   -- might want to change some of the names at some point
   CREATE TEMP TABLE g1poolswithcurrfloat AS
-  SELECT *
+  SELECT 
+    pooldataforweb.cusip,
+    pooldataforweb.name,
+    pooldataforweb.indicator,
+    pooldataforweb.type,
+    pooldataforweb.issuedate,
+    pooldataforweb.currface,
+    pooldataforweb.cfincmo,
+    pooldataforweb.cfinfed,
+    pooldataforweb.cfinplat,
+    pooldataforweb.coupon,
+    pooldataforweb.gwac,
+    pooldataforweb.wala,
+    pooldataforweb.wam,
+    pooldataforweb.va,
+    pooldataforweb.pastactcpr,
+    pooldataforweb.curractualcpr,
+    poolpastpredictions.cpr AS cprpastprediction,
+    pooldataforweb.cprprediction,
+    pooldataforweb.cprpredictionnext,
+    pooldataforweb.pastactcdr,
+    pooldataforweb.curractualcdr,
+    pooldataforweb.cdrprediction,
+    pooldataforweb.cdrpredictionnext,
+    pooldataforweb.date
   FROM pooldataforweb
+  LEFT JOIN poolpastpredictions ON (pooldataforweb.cusip = poolpastpredictions.cusip)
   WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1;
 
   -- \COPY (SELECT * FROM g1poolswithcurrfloat) to 'C:\Users\micha\g1poolswithcurrfloat' csv header;
@@ -240,7 +285,7 @@ begin
   RAISE NOTICE '%', numberofnegatives; 
 
   DROP TABLE IF EXISTS poolscurr, currentactualcpr, pastactualcpr, currentactualcdr, pastactualcdr, poolpredictionscurr, 
-    poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, pooldataforweb, g1poolswithcurrfloat, poolswithnegativefloat;
+    poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, pooldataforweb, g1poolswithcurrfloat, poolswithnegativefloat, poolpastpredictions;
 
 
 end;
@@ -248,10 +293,10 @@ end;
 $$;
 
 
-call outputpools('2021-10-01', '2021-09-01', '2021-11-11', 'M');
+call outputpools('2021-10-01', '2021-09-01', '2021-11-24', 'M');
 
 
-call outputpools('2021-10-01', '2021-09-01', '2021-11-11', 'X');
+call outputpools('2021-10-01', '2021-09-01', '2021-11-24', 'X');
 
 
   -- SELECT * 

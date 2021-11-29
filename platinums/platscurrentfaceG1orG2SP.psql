@@ -76,14 +76,14 @@ begin
   CREATE TEMP TABLE pastactualcpr AS
   SELECT *
   FROM platinumbodies
-  WHERE platinumbodies.date =pastmonth;
+  WHERE platinumbodies.date = pastmonth;
 
 
   -- will need actual cdrs not sure if this is the best way to get it...
   CREATE TEMP TABLE pastactualcdr AS
   SELECT * 
   FROM platinumbodies
-  WHERE platinumbodies.date =pastmonth;
+  WHERE platinumbodies.date = pastmonth;
   -- LIMIT 1;
 
 
@@ -175,6 +175,7 @@ begin
     poolfhavascurr.va,
     pastactualcpr.cpr AS pastactcpr,
     platscurr.cpr,
+    pastactualcpr.predictedcpr AS cprpastprediction,
     platscurr.predictedcpr AS cprprediction,
     platscurr.predictedcprnext AS cprpredictionnext,
     pastactualcdr.cdr AS pastactcdr,
