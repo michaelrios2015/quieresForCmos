@@ -1,4 +1,4 @@
-create or replace PROCEDURE processplatdata(currentmonth DATE, pastmonth DATE)
+create or replace PROCEDURE processplatdata(futuremonth DATE, currentmonth DATE, pastmonth DATE)
 language plpgsql
 as
 $$
@@ -10,19 +10,36 @@ begin
 
     call actualcpr(currentmonth, pastmonth); 
 
-    call predictedcpr(currentmonth, pastmonth); 
+    call predictedcpr(futuremonth, currentmonth); 
 
-    call predictednextcpr(currentmonth, pastmonth);
+    call predictednextcpr(futuremonth, currentmonth);
 
     call actualcdr(currentmonth, pastmonth); 
 
-    call predictedcdr(currentmonth, pastmonth); 
-
-    call predictedcdrnext(currentmonth, pastmonth);
+    call predictedcdr(futuremonth, currentmonth); 
 
 
 end; 
 
 $$;
 
-call processplatdata('2021-10-01', '2021-09-01');
+call processplatdata('2021-10-01', '2021-09-01', '2021-08-01');
+
+UPDATE platinumbodies
+SET 
+    indicator = null,
+    istbaelig = null,
+    cpr = null,
+    cdr = null,
+    predictedcpr = null,
+    predictedcprnext = null,
+    predictedcdr = null,
+    predictedcdrnext = null
+WHERE date = '2021-09-01';
+
+
+
+UPDATE platinumbodies
+SET 
+    cprnext = null
+WHERE date = '2021-10-01';

@@ -1,10 +1,10 @@
--- 12/5/21 this needs to be redone so it has teh future cdr prediction does not look like we are using it at the monent so will leave time the end
+-- 11/23/21 put in stored procedure copied from actualCpr
 
--- 11/23/21 put it in a stored procedure copied from actual cprs did not bother to rename things should do at some point
+-------------Was actual with a couple of changes should be predictions
 
---------------THIS SHOULD WORK 10/7/21
+-- SHOULD BE OK 10/10/21
 
--- SHould include something about what need to be loads 
+-- SHould innclude something about what need to be loads 
 
 -- for this i think we just need pools, plats and platcolls all on the same page 
 
@@ -39,10 +39,7 @@
 
 -- using variables will try and trim it down more the next month 11/13/21
 
-
-
-
-create or replace PROCEDURE predictedcdrnext(currentmonth DATE, pastmonth DATE)
+create or replace PROCEDURE predictednextcpr(currentmonth DATE, pastmonth DATE)
 language plpgsql
 as
 $$
@@ -153,7 +150,7 @@ begin
         currpoolscpr.indicator,
         currpoolscpr.originalface,
         currpoolscpr."remainingBalance",
-        poolpredictions."cdrNext" AS cpr
+        poolpredictions."cprNext" AS cpr
     FROM
         currpoolscpr
     -- I guess it needs to be inner join becuase we need a cpr??
@@ -191,7 +188,7 @@ begin
         CREATE TEMP TABLE platcpr AS
         SELECT 
             platinumbodies.cusip,
-            platinumbodies.predictedcdrnext AS cpr
+            platinumbodies.predictedcprnext AS cpr
         FROM  platinumbodies
         WHERE date = currentmonth;
 
@@ -321,7 +318,7 @@ begin
         FROM stepfour
         INNER JOIN platinumbodies
         ON stepfour.platinumcusip = platinumbodies.cusip
-        WHERE stepfour.cpr = platinumbodies.predictedcdrnext
+        WHERE stepfour.cpr = platinumbodies.predictedcprnext
         AND platinumbodies.date =  currentmonth;
 
         RAISE NOTICE '%', countofequals; 
@@ -329,7 +326,7 @@ begin
         --- This will update platinum bodies cprs now with m + 1
 
         UPDATE platinumbodies
-        SET predictedcdrnext = stepfour.cpr
+        SET predictedcprnext = stepfour.cpr
         FROM stepfour
         WHERE stepfour.platinumcusip = platinumbodies.cusip
         AND platinumbodies.date =  currentmonth;
@@ -354,11 +351,10 @@ end;
 $$;
 
 
-call predictedcdrnext('2021-10-01', '2021-09-01');
+call predictednextcpr('2021-10-01', '2021-09-01');
 
 --- this can erease all the cprs
 UPDATE platinumbodies
 SET cpr = NULL
 WHERE platinumbodies.date = '2021-10-01';
-
 

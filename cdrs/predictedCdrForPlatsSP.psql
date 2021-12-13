@@ -1,3 +1,5 @@
+-- 12/5/21 updated with furture date 
+
 -- 11/23/21 put it in a stored procedure copied from actual cprs did not bother to rename things should do at some point
 
 --------------THIS SHOULD WORK 10/7/21
@@ -40,7 +42,7 @@
 
 
 
-create or replace PROCEDURE predictedcdr(currentmonth DATE, pastmonth DATE)
+create or replace PROCEDURE predictedcdr(futuremonth DATE, currentmonth DATE)
 language plpgsql
 as
 $$
@@ -63,7 +65,7 @@ begin
         pools
     INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
     WHERE
-        poolbodies.date = pastmonth;
+        poolbodies.date = currentmonth;
 
 
     -- what we need from plats
@@ -78,7 +80,7 @@ begin
         platinums
         INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
     WHERE
-        platinumbodies.date = pastmonth;
+        platinumbodies.date = currentmonth;
 
     -- what we need from platcolls from month M
 
@@ -92,7 +94,7 @@ begin
     FROM
         platcolls
     WHERE
-        platcolls.born <= pastmonth;
+        platcolls.born <= currentmonth;
 
     -- LIMIT 2;
 
@@ -157,25 +159,14 @@ begin
     -- I guess it needs to be inner join becuase we need a cpr??
     -- this is where I had to deal with a null value I believe  
     INNER JOIN poolpredictions ON currpoolscpr.cusip = poolpredictions.cusip
-    WHERE poolpredictions.date =  currentmonth;
+    WHERE poolpredictions.date =  futuremonth;
 
     -- This could probably be prettier
     SELECT COUNT(*)
     INTO numberofplatinums    
-    FROM 
-        (
-        SELECT cusip 
-        FROM platinumbodies
-        WHERE DATE = currentmonth
-        ) AS x
-    INNER JOIN
-        (
-        SELECT cusip 
-        FROM platinumbodies
-        WHERE DATE = pastmonth
-        ) AS y
-    ON x.cusip = y.cusip;
-
+    FROM platinumbodies
+    WHERE date = currentmonth;
+    
     RAISE NOTICE '%', numberofplatinums; 
 
     WHILE numberofplatinums > countofequals loop
@@ -352,11 +343,11 @@ end;
 $$;
 
 
-call predictedcdr('2021-10-01', '2021-09-01');
+call predictedcdr('2021-11-01', '2021-10-01');
 
 --- this can erease all the cprs
 UPDATE platinumbodies
-SET cpr = NULL
+SET predictedcdr = null
 WHERE platinumbodies.date = '2021-10-01';
 
 

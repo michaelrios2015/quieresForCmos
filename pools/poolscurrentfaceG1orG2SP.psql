@@ -14,19 +14,27 @@
 -- now with variables
 
 
-create or replace PROCEDURE outputpools(currentmonth DATE, pastmonth DATE, feddate DATE, _indicator VARCHAR)
+create or replace PROCEDURE outputpools(currentmonth DATE, feddate DATE, _indicator VARCHAR)
 language plpgsql
 as
 $$
 declare
    numberofnegatives INTEGER;
+   futuremonth DATE := currentmonth + interval '1 month' * 1;
+   pastmonth DATE := currentmonth - interval '1 month' * 1;
+   twomonthspast DATE := currentmonth - interval '1 month' * 2;
 begin
 
-  DROP TABLE IF EXISTS poolscurr, currentactualcpr, pastactualcpr, currentactualcdr, pastactualcdr, poolpredictionscurr, 
-    poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, pooldataforweb, g1poolswithcurrfloat, poolswithnegativefloat, poolpastpredictions;  
 
-  -- ONLY TBA Elig ones 
-  
+DROP TABLE IF EXISTS 
+  poolscurr, currentactualcpr, currentactualcdr, pastactualcpr, poolpredictionscurr, 
+  poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, pooldataforweb,  
+  poolswithnegativefloat, poolpastpredictions, poolpredictionsfuture,  futureactualcpr,
+  pooltwomonthspastpredictions, pooldataforwebtwo, pooldataforwebthree, twomonthpastactualcpr, futureactualcdr,
+  pooldataforwebfour, futureactualcdr, pooldataforwebfour, cdrpredictionscurr, cdrpredictionsfuture, pooldataforwebfive;
+
+
+  -- cusip, name, indicator, type, issuedate, currface, coupon, gwac, wala, wam, date
   CREATE TEMP TABLE poolscurr AS
   SELECT   
       pools.cusip,
@@ -35,14 +43,12 @@ begin
       pools.type,
       pools.issuedate,
       pools.originalface,
-      pools.istbaelig,
-      poolbodies."remainingBalance",
-      -- calculating the factor on our own
+      poolbodies."remainingBalance" AS currface,
       poolbodies."remainingBalance" / pools.originalface AS factor, 
-      poolbodies."interestRate",
-      poolbodies."GWAC",
-      poolbodies."WAM",
-      poolbodies."WALA",
+      poolbodies."interestRate" AS coupon,
+      poolbodies."GWAC" AS gwac,
+      poolbodies."WAM" AS wam,
+      poolbodies."WALA" AS wala,
       poolbodies.date 
   FROM pools 
   INNER JOIN poolbodies
@@ -51,130 +57,47 @@ begin
   AND pools.indicator =  _indicator
   AND pools.type = 'SF'
   AND pools.istbaelig IS TRUE;
-  -- LIMIT 10;
-
-  RAISE NOTICE 'CREATED TEMP TABLE'; 
-
-  -- will need actual cprs not sure if this is the best way to get it...
-  CREATE TEMP TABLE currentactualcpr AS
-  SELECT *
-  FROM actualcprs
-  WHERE actualcprs.date =  currentmonth;
-  -- LIMIT 1;
 
   RAISE NOTICE 'CREATED TEMP TABLE';
-
-  CREATE TEMP TABLE pastactualcpr AS
-  SELECT *
-  FROM actualcprs
-  WHERE actualcprs.date =  pastmonth;
-
-  RAISE NOTICE 'CREATED TEMP TABLE';
-
-  -- will need actual cdrs not sure if this is the best way to get it...
   
-  CREATE TEMP TABLE currentactualcdr AS
-  SELECT *
-  FROM actualcdrs
-  WHERE actualcdrs.date =  currentmonth;
-  -- LIMIT 1;
+  -- Measured in pennies
+  CREATE TEMP TABLE ofinplatinum AS
+  SELECT 
+      count(*),
+      poolname,
+      indicator,
+      SUM(faceinplatinum/100) as ofinplat 
+  FROM platcolls
+  WHERE born <=  currentmonth
+  GROUP BY poolname, indicator;
 
-  RAISE NOTICE 'CREATED TEMP TABLE';
+  -- adding original face in cmos 
+  -- SO we use the CMOS for month M-1 though just using Month M seems fine too
+  CREATE TEMP TABLE ofpoolincmo AS
+  SELECT
+      cusip,
+      SUM(faceincmo) AS ofincmo
+  FROM uniqueofincmos
+  WHERE date <=  pastmonth
+  -- Probably just not collapsed?? but I guess there could be a scenario where one collapses in the future
+  AND ( collapsed >  pastmonth OR collapsed IS NULL) 
+  GROUP BY cusip;
 
-  CREATE TEMP TABLE pastactualcdr AS
-  SELECT *
-  FROM actualcdrs
-  WHERE actualcdrs.date =  pastmonth;
-  -- LIMIT 1;
-
-  RAISE NOTICE 'CREATED TEMP TABLE';
-
-  -- Adding pool predictions we will use cpr, cprnext, cdr and cdrnext this will be the month M and M+1
-
-  CREATE TEMP TABLE poolpredictionscurr AS
-  SELECT *
-  FROM poolpredictions
-  WHERE poolpredictions.date =  currentmonth;
-
-  RAISE NOTICE 'CREATED TEMP TABLE';
-
-  CREATE TEMP TABLE poolpastpredictions AS
-  SELECT *
-  FROM poolpredictions
-  WHERE poolpredictions.date =  pastmonth;
-
-  RAISE NOTICE 'CREATED TEMP TABLE';
-  -- ditto for poolfhavas
-  -- I think I just use month M
+  --temp table, fed holdings has only one per pool?? I guess so 
+  -- SO Month M + 1.5
+  CREATE TEMP TABLE fedholdingscurr AS
+  SELECT * 
+  FROM fedholdings
+  WHERE fedholdings.asofdate =  feddate;
 
   CREATE TEMP TABLE poolfhavascurr AS
   SELECT *
   FROM poolfhavas
   WHERE poolfhavas.date =  currentmonth;
 
-  RAISE NOTICE 'CREATED TEMP TABLE';
-  -- SELECT * FROM pools INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip LIMIT 2; 
-
-  -- the temp table that sums up original face in platinum them and groups them by poolname and indicator
-  -- which we will use to join to our pool table, so this is fine but need a date thing does it matter if it is 
-  --active or not.. going to assumme it does not
-
-  -- I think this is measured in pennies
-
-  CREATE TEMP TABLE ofinplatinum AS
-  SELECT 
-      count(*),
-      poolname,
-      indicator,
-      SUM(faceinplatinum) as ofinplat 
-  FROM platcolls
-  WHERE born <=  currentmonth
-  -- LIMIT 4;
-  GROUP BY
-      poolname,
-      indicator;
-
-  RAISE NOTICE 'CREATED TEMP TABLE';
-  -- adding original face in cmos 
-
-  -- think i need more cmos 10/24/21
-  -- SO we use the CMOS for month M-1 though just using Month M seems fine too
-  
-  CREATE TEMP TABLE ofpoolincmo AS
-  SELECT
-      cusip,
-      -- date,
-      -- COUNT (*),
-      SUM(faceincmo) AS ofincmo
-  FROM
-      uniqueofincmos
-  WHERE date <=  pastmonth
-  AND ( collapsed >  pastmonth OR collapsed IS NULL) 
-  GROUP BY
-      cusip;
-  --     date
-  -- ORDER BY date DESC
-  -- LIMIT 2;
-
-  ----now to add feds and we are good, the fed uses current face so we can just keep it like that 
-  -- Switched back to june...
-
-  --temp table, fed holdings has only one per pool?? I guess so 
-  -- SO Month M + 1.5
-  
-  RAISE NOTICE 'CREATED TEMP TABLE';
-
-  CREATE TEMP TABLE fedholdingscurr AS
-  SELECT * 
-  FROM fedholdings
-  WHERE fedholdings.asofdate =  feddate;
-
   RAISE NOTICE 'PUTTING IT ALL TOGTHER';
     
-  -- joining it to other stuff 
-  --this just needs to be turned into a copy statement and I need to check on which data we want 
-  -- Actual CDR should be added might hav it not sure 
-  
+  -- cusip,name,indicator,type,issuedate,currface,cfincmo,cfinfed,cfinplat,coupon,gwac,wala,wam,va,
   CREATE TEMP TABLE pooldataforweb AS
   SELECT
     poolscurr.cusip,
@@ -182,53 +105,58 @@ begin
     poolscurr.indicator,
     poolscurr.type,
     poolscurr.issuedate,
-    poolscurr."remainingBalance" AS currface,
-    --   poolscurr.factor,
-    --   ofpoolincmo.ofincmo,
+    poolscurr.currface,
     ofpoolincmo.ofincmo * poolscurr.factor AS cfincmo,
     fedholdingscurr.currentfacevalue AS cfinfed,
-    --   ofinplatinum.ofinplat,
-    (ofinplatinum.ofinplat/100) * poolscurr.factor AS cfinplat,
-    poolscurr."interestRate" as coupon,
-    poolscurr."GWAC" AS gwac,
-    poolscurr."WALA" AS wala,
-    poolscurr."WAM" AS wam,
+    ofinplatinum.ofinplat * poolscurr.factor AS cfinplat,
+    poolscurr.coupon,
+    poolscurr.gwac,
+    poolscurr.wala,
+    poolscurr.wam,
     poolfhavascurr.va,
-    pastactualcpr.actualcpr AS pastactcpr,
-    currentactualcpr.actualcpr AS curractualcpr,
-    poolpredictionscurr.cpr AS cprprediction,
-    poolpredictionscurr."cprNext" AS cprpredictionnext,
-    pastactualcdr.cdr AS pastactcdr,
-    currentactualcdr.cdr AS curractualcdr,
-    poolpredictionscurr.cdr AS cdrprediction,
-    poolpredictionscurr."cdrNext" AS cdrpredictionnext,
     poolscurr.date
-  FROM
-    poolscurr
-  LEFT JOIN pastactualcpr ON (poolscurr.cusip = pastactualcpr.cusip)
-  LEFT JOIN currentactualcpr ON (poolscurr.cusip = currentactualcpr.cusip)
-    LEFT JOIN pastactualcdr ON (poolscurr.cusip = pastactualcdr.cusip)
-    LEFT JOIN currentactualcdr ON (poolscurr.cusip = currentactualcdr.cusip)
-    LEFT JOIN poolpredictionscurr ON (poolscurr.cusip = poolpredictionscurr.cusip)
-    LEFT JOIN poolfhavascurr ON (poolscurr.cusip = poolfhavascurr.cusip)
-    LEFT JOIN ofinplatinum 
-      ON poolscurr.name = ofinplatinum.poolname
-      AND poolscurr.indicator = ofinplatinum.indicator
-    LEFT JOIN ofpoolincmo ON poolscurr.cusip = ofpoolincmo.cusip 
-    LEFT JOIN fedholdingscurr ON poolscurr.cusip = fedholdingscurr.cusip;  
-  --   WHERE poolscurr.cusip = '36202DVX6'  
-  -- WHERE fedholdingscurr.currentfacevalue IS NOT NULL
-  -- LIMIT
-    -- 10;
+  FROM poolscurr
+  LEFT JOIN poolfhavascurr ON (poolscurr.cusip = poolfhavascurr.cusip)
+  LEFT JOIN ofinplatinum 
+    ON poolscurr.name = ofinplatinum.poolname
+    AND poolscurr.indicator = ofinplatinum.indicator
+  LEFT JOIN ofpoolincmo ON poolscurr.cusip = ofpoolincmo.cusip 
+  LEFT JOIN fedholdingscurr ON poolscurr.cusip = fedholdingscurr.cusip;  
 
+  RAISE NOTICE 'CREATED TEMP TABLE'; 
 
-  -- this gets all the pools, eventually will want to limit it to pools with float 
+  -- this is only used for the primilinary CPRS
+  CREATE TEMP TABLE futureactualcpr AS
+  SELECT actualcprs.cusip, actualcprs.actualcpr
+  FROM actualcprs
+  INNER JOIN pooldataforweb
+  ON pooldataforweb.cusip = actualcprs.cusip
+  WHERE actualcprs.date = futuremonth;
 
-  RAISE NOTICE 'WEEDING OUT DEAD ONES';
+  CREATE TEMP TABLE currentactualcpr AS
+  SELECT actualcprs.cusip, actualcprs.actualcpr
+  FROM actualcprs
+  INNER JOIN pooldataforweb
+  ON pooldataforweb.cusip = actualcprs.cusip
+  WHERE actualcprs.date =  currentmonth;
 
-  -- might want to change some of the names at some point
-  CREATE TEMP TABLE g1poolswithcurrfloat AS
-  SELECT 
+  CREATE TEMP TABLE pastactualcpr AS
+  SELECT actualcprs.cusip, actualcprs.actualcpr
+  FROM actualcprs
+  INNER JOIN pooldataforweb
+  ON pooldataforweb.cusip = actualcprs.cusip
+  WHERE actualcprs.date =  pastmonth;
+
+  CREATE TEMP TABLE twomonthpastactualcpr AS
+  SELECT actualcprs.cusip, actualcprs.actualcpr
+  FROM actualcprs
+  INNER JOIN pooldataforweb
+  ON pooldataforweb.cusip = actualcprs.cusip
+  WHERE actualcprs.date =  twomonthspast;
+
+  -- twomonthspastactcpr, pastactcpr,cpr,cprnext,
+  CREATE TEMP TABLE pooldataforwebtwo AS
+  SELECT
     pooldataforweb.cusip,
     pooldataforweb.name,
     pooldataforweb.indicator,
@@ -243,23 +171,193 @@ begin
     pooldataforweb.wala,
     pooldataforweb.wam,
     pooldataforweb.va,
-    pooldataforweb.pastactcpr,
-    pooldataforweb.curractualcpr,
-    poolpastpredictions.cpr AS cprpastprediction,
-    pooldataforweb.cprprediction,
-    pooldataforweb.cprpredictionnext,
-    pooldataforweb.pastactcdr,
-    pooldataforweb.curractualcdr,
-    pooldataforweb.cdrprediction,
-    pooldataforweb.cdrpredictionnext,
+    twomonthpastactualcpr.actualcpr AS twomonthspastactcpr,
+    pastactualcpr.actualcpr AS pastactcpr,
+    currentactualcpr.actualcpr AS curractualcpr,
+    futureactualcpr.actualcpr AS cpractnext,
     pooldataforweb.date
-  FROM pooldataforweb
-  LEFT JOIN poolpastpredictions ON (pooldataforweb.cusip = poolpastpredictions.cusip)
+  FROM pooldataforweb  
+  LEFT JOIN twomonthpastactualcpr ON (pooldataforweb.cusip = twomonthpastactualcpr.cusip)
+  LEFT JOIN pastactualcpr ON (pooldataforweb.cusip = pastactualcpr.cusip)
+  LEFT JOIN currentactualcpr ON (pooldataforweb.cusip = currentactualcpr.cusip)
+  LEFT JOIN futureactualcpr ON (pooldataforweb.cusip = futureactualcpr.cusip)
   WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1;
+  
+  RAISE NOTICE 'CREATED TEMP TABLE';
 
-  -- \COPY (SELECT * FROM g1poolswithcurrfloat) to 'C:\Users\micha\g1poolswithcurrfloat' csv header;
+  -- for the residulas
+  CREATE TEMP TABLE pooltwomonthspastpredictions AS
+  SELECT poolpredictions.cusip, poolpredictions.cpr
+  FROM poolpredictions
+  INNER JOIN pooldataforwebtwo
+  ON pooldataforwebtwo.cusip = poolpredictions.cusip
+  WHERE poolpredictions.date = twomonthspast;
 
-  EXECUTE 'COPY (SELECT * FROM g1poolswithcurrfloat) to ''C:\Users\Public\poolswithcurrfloat' || _indicator || ''' csv header';
+  -- for the residulas
+  CREATE TEMP TABLE poolpastpredictions AS
+  SELECT poolpredictions.cusip, poolpredictions.cpr
+  FROM poolpredictions
+  INNER JOIN pooldataforwebtwo
+  ON pooldataforwebtwo.cusip = poolpredictions.cusip
+  WHERE poolpredictions.date = pastmonth;
+
+  -- for the residulas
+  CREATE TEMP TABLE poolpredictionscurr AS
+  SELECT poolpredictions.cusip, poolpredictions.cpr
+  FROM poolpredictions
+  INNER JOIN pooldataforwebtwo
+  ON pooldataforwebtwo.cusip = poolpredictions.cusip
+  WHERE poolpredictions.date = currentmonth;
+
+  -- we will show the two months of predictions
+  CREATE TEMP TABLE poolpredictionsfuture AS
+  SELECT poolpredictions.cusip, poolpredictions.cpr, poolpredictions."cprNext"
+  FROM poolpredictions
+  INNER JOIN pooldataforwebtwo
+  ON pooldataforwebtwo.cusip = poolpredictions.cusip
+  WHERE poolpredictions.date = futuremonth;
+
+  -- twomonthspastpredictedcpr, cprpastprediction, currcprprediction, futurecprprediction, futurecprnextprediction
+
+  CREATE TEMP TABLE pooldataforwebthree AS
+  SELECT
+    pooldataforwebtwo.cusip,
+    pooldataforwebtwo.name,
+    pooldataforwebtwo.indicator,
+    pooldataforwebtwo.type,
+    pooldataforwebtwo.issuedate,
+    pooldataforwebtwo.currface,
+    pooldataforwebtwo.cfincmo,
+    pooldataforwebtwo.cfinfed,
+    pooldataforwebtwo.cfinplat,
+    pooldataforwebtwo.coupon,
+    pooldataforwebtwo.gwac,
+    pooldataforwebtwo.wala,
+    pooldataforwebtwo.wam,
+    pooldataforwebtwo.va,
+    pooldataforwebtwo.twomonthspastactcpr,
+    pooldataforwebtwo.pastactcpr,
+    pooldataforwebtwo.curractualcpr,
+    pooldataforwebtwo.cpractnext,
+    pooltwomonthspastpredictions.cpr AS twomonthspastpredictedcpr,
+    poolpastpredictions.cpr AS pastpredictedcpr,
+    poolpredictionscurr.cpr AS currpredictedcpr,
+    poolpredictionsfuture.cpr AS futurepredictedcpr,
+    poolpredictionsfuture."cprNext" AS futurepredictedcprnext,
+    pooldataforwebtwo.date
+  FROM pooldataforwebtwo  
+  LEFT JOIN pooltwomonthspastpredictions ON (pooldataforwebtwo.cusip = pooltwomonthspastpredictions.cusip)
+  LEFT JOIN poolpastpredictions ON (pooldataforwebtwo.cusip = poolpastpredictions.cusip)
+  LEFT JOIN poolpredictionscurr ON (pooldataforwebtwo.cusip = poolpredictionscurr.cusip)
+  LEFT JOIN poolpredictionsfuture ON (pooldataforwebtwo.cusip = poolpredictionsfuture.cusip);
+
+  -- cprtwomonthspastprediction, cprpastprediction, currcprprediction, futurecprprediction, futurecprnextprediction
+  
+  -- RAISE NOTICE 'CREATED TEMP TABLE';
+
+  CREATE TEMP TABLE currentactualcdr AS
+  SELECT actualcdrs.cusip, actualcdrs.cdr as curractualcdr
+  FROM actualcdrs
+  INNER JOIN pooldataforwebtwo
+  ON pooldataforwebtwo.cusip = actualcdrs.cusip
+  WHERE actualcdrs.date =  currentmonth;
+  -- LIMIT 1;
+
+  CREATE TEMP TABLE futureactualcdr AS
+  SELECT actualcdrs.cusip, actualcdrs.cdr AS futureactualcdr
+  FROM actualcdrs
+  INNER JOIN pooldataforwebtwo
+  ON pooldataforwebtwo.cusip = actualcdrs.cusip
+  WHERE actualcdrs.date =  futuremonth;
+
+  CREATE TEMP TABLE pooldataforwebfour AS
+  SELECT 
+    pooldataforwebthree.cusip,
+    pooldataforwebthree.name,
+    pooldataforwebthree.indicator,
+    pooldataforwebthree.type,
+    pooldataforwebthree.issuedate,
+    pooldataforwebthree.currface,
+    pooldataforwebthree.cfincmo,
+    pooldataforwebthree.cfinfed,
+    pooldataforwebthree.cfinplat,
+    pooldataforwebthree.coupon,
+    pooldataforwebthree.gwac,
+    pooldataforwebthree.wala,
+    pooldataforwebthree.wam,
+    pooldataforwebthree.va,
+    pooldataforwebthree.twomonthspastactcpr,
+    pooldataforwebthree.pastactcpr,
+    pooldataforwebthree.curractualcpr,
+    pooldataforwebthree.cpractnext,
+    pooldataforwebthree.twomonthspastpredictedcpr,
+    pooldataforwebthree.pastpredictedcpr,
+    pooldataforwebthree.currpredictedcpr,
+    pooldataforwebthree.futurepredictedcpr,
+    pooldataforwebthree.futurepredictedcprnext,
+    currentactualcdr.curractualcdr,
+    futureactualcdr.futureactualcdr,
+    pooldataforwebthree.date
+  FROM pooldataforwebthree  
+  LEFT JOIN futureactualcdr ON (pooldataforwebthree.cusip = futureactualcdr.cusip)
+  LEFT JOIN currentactualcdr ON (pooldataforwebthree.cusip = currentactualcdr.cusip);
+
+  -- -- cdr,currcdrprediction,cdrprediction,date
+  CREATE TEMP TABLE cdrpredictionscurr AS
+  SELECT poolpredictions.cusip, poolpredictions.cdr AS currcdrprediction
+  FROM poolpredictions
+  INNER JOIN pooldataforwebtwo
+  ON pooldataforwebtwo.cusip = poolpredictions.cusip
+  WHERE poolpredictions.date = currentmonth;
+
+  -- we will show the two months of predictions
+  CREATE TEMP TABLE cdrpredictionsfuture AS
+  SELECT poolpredictions.cusip, poolpredictions.cdr AS futurecdrprediction
+  FROM poolpredictions
+  INNER JOIN pooldataforwebtwo
+  ON pooldataforwebtwo.cusip = poolpredictions.cusip
+  WHERE poolpredictions.date = futuremonth;
+
+
+  CREATE TEMP TABLE pooldataforwebfive AS
+  SELECT 
+      pooldataforwebfour.cusip,
+      pooldataforwebfour.name,
+      pooldataforwebfour.indicator,
+      pooldataforwebfour.type,
+      pooldataforwebfour.issuedate,
+      pooldataforwebfour.currface,
+      pooldataforwebfour.cfincmo,
+      pooldataforwebfour.cfinfed,
+      pooldataforwebfour.cfinplat,
+      pooldataforwebfour.coupon,
+      pooldataforwebfour.gwac,
+      pooldataforwebfour.wala,
+      pooldataforwebfour.wam,
+      pooldataforwebfour.va,
+      pooldataforwebfour.twomonthspastactcpr,
+      pooldataforwebfour.pastactcpr,
+      pooldataforwebfour.curractualcpr,
+      pooldataforwebfour.cpractnext,
+      pooldataforwebfour.twomonthspastpredictedcpr,
+      pooldataforwebfour.pastpredictedcpr,
+      pooldataforwebfour.currpredictedcpr,
+      pooldataforwebfour.futurepredictedcpr,
+      pooldataforwebfour.futurepredictedcprnext,
+      pooldataforwebfour.curractualcdr,
+      pooldataforwebfour.futureactualcdr,
+      cdrpredictionscurr.currcdrprediction,
+      cdrpredictionsfuture.futurecdrprediction,
+      pooldataforwebfour.date
+  FROM pooldataforwebfour  
+  LEFT JOIN cdrpredictionscurr ON (pooldataforwebfour.cusip = cdrpredictionscurr.cusip)
+  LEFT JOIN cdrpredictionsfuture ON (pooldataforwebfour.cusip = cdrpredictionsfuture.cusip);
+
+  -- this gets all the pools, eventually will want to limit it to pools with float 
+
+  -- \COPY (SELECT * FROM pooldataforwedfive) to 'C:\Users\micha\g1poolswithcurrfloat' csv header;
+
+  EXECUTE 'COPY (SELECT * FROM pooldataforwebfive) to ''C:\Users\Public\poolswithcurrfloat' || _indicator || ''' csv header';
 
   ---------pools with negative current face 
   CREATE TEMP TABLE poolswithnegativefloat AS
@@ -284,8 +382,12 @@ begin
 
   RAISE NOTICE '%', numberofnegatives; 
 
-  DROP TABLE IF EXISTS poolscurr, currentactualcpr, pastactualcpr, currentactualcdr, pastactualcdr, poolpredictionscurr, 
-    poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, pooldataforweb, g1poolswithcurrfloat, poolswithnegativefloat, poolpastpredictions;
+DROP TABLE IF EXISTS 
+  poolscurr, currentactualcpr, currentactualcdr, pastactualcpr, poolpredictionscurr, 
+  poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, pooldataforweb,  
+  poolswithnegativefloat, poolpastpredictions, poolpredictionsfuture,  futureactualcpr,
+  pooltwomonthspastpredictions, pooldataforwebtwo, pooldataforwebthree, twomonthpastactualcpr, futureactualcdr,
+  pooldataforwebfour, futureactualcdr, pooldataforwebfour, cdrpredictionscurr, cdrpredictionsfuture, pooldataforwebfive;
 
 
 end;
@@ -293,10 +395,15 @@ end;
 $$;
 
 
-call outputpools('2021-10-01', '2021-09-01', '2021-11-24', 'M');
+call outputpools( '2021-11-01', '2021-12-08', 'M');
+
+call outputpools( '2021-11-01', '2021-12-08', 'X');
 
 
-call outputpools('2021-10-01', '2021-09-01', '2021-11-24', 'X');
+call outputpools('2021-11-01', '2021-10-01', '2021-09-01', '2021-12-01', 'M');
+
+
+call outputpools('2021-11-01', '2021-10-01', '2021-09-01', '2021-12-01', 'X');
 
 
   -- SELECT * 
@@ -325,3 +432,39 @@ FROM pooldataforweb
 WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1
 ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC
 LIMIT 100;
+
+
+ 
+\COPY (SELECT cusip FROM pools WHERE type = 'SF' and indicator = 'M') to 'C:\Users\micha\g2mwithcurrentfloat' csv header;
+
+\COPY (SELECT cusip FROM pools WHERE type = 'SF' and indicator = 'C') to 'C:\Users\micha\g2c' csv header;
+
+\COPY (SELECT cusip FROM pools where indicator = 'X') to 'C:\Users\micha\g1x' csv header;
+
+\COPY (SELECT * FROM g1s) to 'C:\Users\micha\g1xwithcurrfloat' csv header;
+
+SELECT cusip
+FROM pools
+WHERE type = 'SF'
+and indicator = 'M'
+LIMIT 2;
+
+
+SELECT cusip
+FROM pools
+WHERE type = 'SF'
+and indicator = 'M'
+LIMIT 2;
+
+
+\COPY (SELECT cusip FROM pools where indicator = 'X') to 'C:\Users\micha\g1x' csv header;
+
+
+
+
+
+
+
+
+update salereg1 
+\set expdate = '2021-10-01' + interval '1 month' * 2;

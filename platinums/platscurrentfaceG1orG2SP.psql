@@ -26,7 +26,6 @@
 -- G2: G2 and one with Type = "SF' and Indicator = 'M" G2
 
 
-
 create or replace PROCEDURE outputplats(currentmonth DATE, pastmonth DATE, feddate DATE, _indicator VARCHAR)
 language plpgsql
 as
@@ -35,7 +34,7 @@ declare
    numberofnegatives INTEGER;
 begin
 
-  DROP TABLE IF EXISTS platscurr, pastactualcpr, pastactualcdr, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
+  DROP TABLE IF EXISTS platscurr, pastdata, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
 
   -- ONLY TBA Elig ones 
   CREATE TEMP TABLE platscurr AS
@@ -54,6 +53,7 @@ begin
       platinumbodies.wam,
       platinumbodies.wala,
       platinumbodies.cpr,
+      platinumbodies.cprnext,
       platinumbodies.predictedcpr,
       platinumbodies.predictedcprnext,
       platinumbodies.cdr,
@@ -68,35 +68,21 @@ begin
   AND platinumbodies.indicator = _indicator
   AND platinums.type = 'SP'
   AND platinumbodies.istbaelig IS TRUE;
-  -- LIMIT 3;
 
 
-  -- will need actual cprs not sure if this is the best way to get it...
 
-  CREATE TEMP TABLE pastactualcpr AS
+  -- for info from the past month
+  CREATE TEMP TABLE pastdata AS
   SELECT *
   FROM platinumbodies
   WHERE platinumbodies.date = pastmonth;
 
-
-  -- will need actual cdrs not sure if this is the best way to get it...
-  CREATE TEMP TABLE pastactualcdr AS
-  SELECT * 
-  FROM platinumbodies
-  WHERE platinumbodies.date = pastmonth;
-  -- LIMIT 1;
-
-
-  -- Does this apply to platinums?? not sure
-  -- ditto for poolfhavas
-  -- I think I just use month M
+  -- I think there are platinums in here too but should check and take out if not
   CREATE TEMP TABLE poolfhavascurr AS
   SELECT *
   FROM poolfhavas
-  WHERE poolfhavas.date =currentmonth;
+  WHERE poolfhavas.date = currentmonth;
 
-
-  -- SELECT * FROM pools INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip LIMIT 2; 
 
   -- the temp table that sums up original face in platinum them and groups them by poolname (with platinums we 
   -- only use poolname as we made our own indicator)
@@ -116,17 +102,10 @@ begin
       poolname;
       
   -- adding original face in cmos 
-
-  -- TEMP TABLE 
-  -- not really sure how date is being used..... allmost all cmos has not been updated since june..
-  ---NEEDS TO BE CHANGED
-
   -- MONTH M-1 though month M is ok too
   CREATE TEMP TABLE ofpoolincmo AS
   SELECT
       cusip,
-      -- date,
-      -- COUNT (*),
       SUM(faceincmo) AS ofincmo
   FROM
       uniqueofincmos
@@ -134,26 +113,18 @@ begin
   AND ( collapsed >  pastmonth OR collapsed IS NULL) 
   GROUP BY
       cusip;
-  --     date
-  -- ORDER BY date DESC
-  -- LIMIT 2;
 
   ----now to add feds and we are good, the fed uses current face so we can just keep it like that 
-  -- Switched back to june...
-
   --temp table, fed holdings has only one per pool?? I guess so 
   -- SO Month M + 1.5
+
   CREATE TEMP TABLE fedholdingscurr AS
   SELECT * 
   FROM fedholdings
   WHERE fedholdings.asofdate = feddate;
 
+  -- joining stuff togther should do this is smaller steps to make it easier to read and modify 
 
-    
-  -- joining it to other stuff 
-  --this just needs to be turned into a copy statement and I need to check on which data we want 
-  -- Actual CDR should be added might hav it not sure 
-  -- I think this works 10/11/21
   CREATE TEMP TABLE platdataforweb AS
   SELECT
     platscurr.cusip,
@@ -162,40 +133,34 @@ begin
     platscurr.type,
     platscurr.issuedate,
     platscurr.remainingbalance AS currface,
-    --   platscurr.factor,
-    --   ofpoolincmo.ofincmo,
     ofpoolincmo.ofincmo * platscurr.factor AS cfincmo,
     fedholdingscurr.currentfacevalue AS cfinfed,
-    --   ofinplatinum.ofinplat,
     (ofinplatinum.ofinplat/100) * platscurr.factor AS cfinplat,
     platscurr.interestrate as coupon,
     platscurr.gwac, 
     platscurr.wala,
     platscurr.wam,
     poolfhavascurr.va,
-    pastactualcpr.cpr AS pastactcpr,
+    pastdata.cpr AS pastactcpr,
     platscurr.cpr,
-    pastactualcpr.predictedcpr AS cprpastprediction,
-    platscurr.predictedcpr AS cprprediction,
-    platscurr.predictedcprnext AS cprpredictionnext,
-    pastactualcdr.cdr AS pastactcdr,
+    platscurr.cprnext,
+    -- needs to be filled in (prediction from 2 month ago)
+    NULL AS cprpastprediction,
+    pastdata.predictedcpr AS currcprprediction,
+    platscurr.predictedcpr AS futurecprprediction,
+    platscurr.predictedcprnext AS futurecprnextprediction,
     platscurr.cdr,
+    pastdata.predictedcdr AS currcdrprediction,
     platscurr.predictedcdr AS cdrprediction,
-    platscurr.predictedcdrnext AS cdrpredictionnext,
     platscurr.date
   FROM
     platscurr
-    LEFT JOIN pastactualcpr ON (platscurr.cusip = pastactualcpr.cusip)
-    LEFT JOIN pastactualcdr ON (platscurr.cusip = pastactualcdr.cusip)
+    LEFT JOIN pastdata ON (platscurr.cusip = pastdata.cusip)
     LEFT JOIN poolfhavascurr ON (platscurr.cusip = poolfhavascurr.cusip)
     LEFT JOIN ofinplatinum 
       ON platscurr.name = ofinplatinum.poolname
     LEFT JOIN ofpoolincmo ON platscurr.cusip = ofpoolincmo.cusip 
     LEFT JOIN fedholdingscurr ON platscurr.cusip = fedholdingscurr.cusip;  
-  --   WHERE poolscurr.cusip = '36202DVX6'  
-  -- WHERE fedholdingscurr.currentfacevalue IS NOT NULL
-  -- LIMIT
-  --   10;
 
   CREATE TEMP TABLE g1platswithcurrfloat AS
   SELECT *
@@ -225,7 +190,7 @@ begin
 
   EXECUTE 'COPY (SELECT * FROM platswithnegativefloat) to ''C:\Users\Public\ginnieplatswithnegativefloat' || _indicator || ''' csv header';
 
-  DROP TABLE IF EXISTS platscurr, pastactualcpr, pastactualcdr, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
+  DROP TABLE IF EXISTS platscurr, pastdata, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
 
 
 end;
@@ -234,10 +199,10 @@ $$;
 
 -- SEEMS to work fine :)
 
-call outputplats('2021-10-01', '2021-09-01', '2021-11-11', 'M');
+call outputplats('2021-10-01', '2021-09-01', '2021-12-01', 'M');
 
 
-call outputplats('2021-10-01', '2021-09-01', '2021-11-11', 'X');
+call outputplats('2021-10-01', '2021-09-01', '2021-12-01', 'X');
 
 
 
@@ -252,3 +217,7 @@ AND collapsed IS NULL
 ORDER BY cmo;
 
 
+
+
+ALTER TABLE platinumbodies
+ADD COLUMN cprnext double precision;

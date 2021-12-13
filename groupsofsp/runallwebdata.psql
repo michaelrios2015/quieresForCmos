@@ -1,6 +1,6 @@
 
 
-create or replace PROCEDURE processdataforweb(currentmonth DATE, pastmonth DATE, feddate DATE)
+create or replace PROCEDURE processdataforweb(futuremonth DATE, currentmonth DATE, pastmonth DATE, feddate DATE)
 language plpgsql
 as
 $$
@@ -8,9 +8,9 @@ declare
 
 begin
 
-    call outputpools(currentmonth, pastmonth, feddate, 'M');
+    call outputpools(futuremonth, currentmonth, pastmonth, feddate, 'M');
 
-    call outputpools(currentmonth, pastmonth, feddate, 'X');
+    call outputpools(futuremonth, currentmonth, pastmonth, feddate, 'X');
 
     call outputplats(currentmonth, pastmonth, feddate, 'M');
 
@@ -21,4 +21,11 @@ end;
 
 $$;
 
-call processdataforweb('2021-10-01', '2021-09-01', '2021-11-11');
+call processdataforweb('2021-11-01', '2021-10-01', '2021-09-01', '2021-12-01');
+
+
+
+call outputpools('2021-11-01', '2021-10-01', '2021-09-01', '2021-12-01', 'M');
+
+
+call outputpools('2021-11-01', '2021-10-01', '2021-09-01', '2021-12-01', 'X');

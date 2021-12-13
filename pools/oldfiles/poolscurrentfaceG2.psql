@@ -33,8 +33,9 @@ FROM pools
 INNER JOIN poolbodies
 ON pools.cusip = poolbodies.cusip 
 WHERE poolbodies.date = '2021-09-01'
-AND pools.indicator = 'M'
+-- AND pools.indicator = 'M'
 -- AND pools.indicator = 'X'
+AND pools.indicator = 'C'
 AND pools.type = 'SF'
 AND pools.istbaelig IS TRUE;
 -- LIMIT 10;

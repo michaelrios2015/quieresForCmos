@@ -1,6 +1,6 @@
--- 11/23/21 put in stored procedure copied from actualCpr
+-- 12/5/21 so i had this wrong we want the prediction for the month + 1 or whatI am calling the future month it's hopefully ok now 
 
--------------Was actual with a couple of changes should be predictions
+-- 11/23/21 now in a stored procedure still copied from actual so some of the naming is a bit of but it's OK
 
 -- SHOULD BE OK 10/10/21
 
@@ -39,7 +39,7 @@
 
 -- using variables will try and trim it down more the next month 11/13/21
 
-create or replace PROCEDURE predictednextcpr(currentmonth DATE, pastmonth DATE)
+create or replace PROCEDURE predictedcpr(futuremonth DATE, currentmonth DATE)
 language plpgsql
 as
 $$
@@ -62,7 +62,7 @@ begin
         pools
     INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
     WHERE
-        poolbodies.date = pastmonth;
+        poolbodies.date = currentmonth;
 
 
     -- what we need from plats
@@ -77,7 +77,7 @@ begin
         platinums
         INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
     WHERE
-        platinumbodies.date = pastmonth;
+        platinumbodies.date = currentmonth;
 
     -- what we need from platcolls from month M
 
@@ -91,7 +91,7 @@ begin
     FROM
         platcolls
     WHERE
-        platcolls.born <= pastmonth;
+        platcolls.born <= currentmonth;
 
     -- LIMIT 2;
 
@@ -150,31 +150,37 @@ begin
         currpoolscpr.indicator,
         currpoolscpr.originalface,
         currpoolscpr."remainingBalance",
-        poolpredictions."cprNext" AS cpr
+        poolpredictions.cpr AS cpr
     FROM
         currpoolscpr
     -- I guess it needs to be inner join becuase we need a cpr??
     -- this is where I had to deal with a null value I believe  
     INNER JOIN poolpredictions ON currpoolscpr.cusip = poolpredictions.cusip
-    WHERE poolpredictions.date =  currentmonth;
+    WHERE poolpredictions.date =  futuremonth;
 
-    -- This could probably be prettier
+    -- -- This could probably be prettier
+    -- SELECT COUNT(*)
+    -- INTO numberofplatinums    
+    -- FROM 
+    --     (
+    --     SELECT cusip 
+    --     FROM platinumbodies
+    --     WHERE DATE = futuremonth
+    --     ) AS x
+    -- INNER JOIN
+    --     (
+    --     SELECT cusip 
+    --     FROM platinumbodies
+    --     WHERE DATE = currentmonth
+    --     ) AS y
+    -- ON x.cusip = y.cusip;
+
+        -- This could probably be prettier
     SELECT COUNT(*)
     INTO numberofplatinums    
-    FROM 
-        (
-        SELECT cusip 
-        FROM platinumbodies
-        WHERE DATE = currentmonth
-        ) AS x
-    INNER JOIN
-        (
-        SELECT cusip 
-        FROM platinumbodies
-        WHERE DATE = pastmonth
-        ) AS y
-    ON x.cusip = y.cusip;
-
+    FROM platinumbodies
+    WHERE DATE = currentmonth;
+    
     RAISE NOTICE '%', numberofplatinums; 
 
     WHILE numberofplatinums > countofequals loop
@@ -188,7 +194,7 @@ begin
         CREATE TEMP TABLE platcpr AS
         SELECT 
             platinumbodies.cusip,
-            platinumbodies.predictedcprnext AS cpr
+            platinumbodies.predictedcpr AS cpr
         FROM  platinumbodies
         WHERE date = currentmonth;
 
@@ -318,7 +324,7 @@ begin
         FROM stepfour
         INNER JOIN platinumbodies
         ON stepfour.platinumcusip = platinumbodies.cusip
-        WHERE stepfour.cpr = platinumbodies.predictedcprnext
+        WHERE stepfour.cpr = platinumbodies.predictedcpr
         AND platinumbodies.date =  currentmonth;
 
         RAISE NOTICE '%', countofequals; 
@@ -326,7 +332,7 @@ begin
         --- This will update platinum bodies cprs now with m + 1
 
         UPDATE platinumbodies
-        SET predictedcprnext = stepfour.cpr
+        SET predictedcpr = stepfour.cpr
         FROM stepfour
         WHERE stepfour.platinumcusip = platinumbodies.cusip
         AND platinumbodies.date =  currentmonth;
@@ -351,10 +357,10 @@ end;
 $$;
 
 
-call predictednextcpr('2021-10-01', '2021-09-01');
+call predictedcpr('2021-11-01', '2021-10-01');
 
 --- this can erease all the cprs
 UPDATE platinumbodies
-SET cpr = NULL
+SET predictedcpr = 0
 WHERE platinumbodies.date = '2021-10-01';
 

@@ -1,6 +1,4 @@
--- 12/5/21 this needs to be redone so it has teh future cdr prediction does not look like we are using it at the monent so will leave time the end
-
--- 11/23/21 put it in a stored procedure copied from actual cprs did not bother to rename things should do at some point
+-- 11/23/21 trying to put it in a stored procedure
 
 --------------THIS SHOULD WORK 10/7/21
 
@@ -39,10 +37,11 @@
 
 -- using variables will try and trim it down more the next month 11/13/21
 
+-- my naming conventions are slightly off that ok 12/5/21
 
 
 
-create or replace PROCEDURE predictedcdrnext(currentmonth DATE, pastmonth DATE)
+create or replace PROCEDURE actualcprnext(currentmonth DATE, pastmonth DATE)
 language plpgsql
 as
 $$
@@ -153,30 +152,19 @@ begin
         currpoolscpr.indicator,
         currpoolscpr.originalface,
         currpoolscpr."remainingBalance",
-        poolpredictions."cdrNext" AS cpr
+        actualcprs.actualcpr
     FROM
         currpoolscpr
     -- I guess it needs to be inner join becuase we need a cpr??
     -- this is where I had to deal with a null value I believe  
-    INNER JOIN poolpredictions ON currpoolscpr.cusip = poolpredictions.cusip
-    WHERE poolpredictions.date =  currentmonth;
+    INNER JOIN actualcprs ON currpoolscpr.cusip = actualcprs.cusip
+    WHERE actualcprs.date =  currentmonth;
 
     -- This could probably be prettier
     SELECT COUNT(*)
     INTO numberofplatinums    
-    FROM 
-        (
-        SELECT cusip 
-        FROM platinumbodies
-        WHERE DATE = currentmonth
-        ) AS x
-    INNER JOIN
-        (
-        SELECT cusip 
-        FROM platinumbodies
-        WHERE DATE = pastmonth
-        ) AS y
-    ON x.cusip = y.cusip;
+    FROM platinumbodies
+    WHERE DATE = pastmonth;
 
     RAISE NOTICE '%', numberofplatinums; 
 
@@ -191,9 +179,9 @@ begin
         CREATE TEMP TABLE platcpr AS
         SELECT 
             platinumbodies.cusip,
-            platinumbodies.predictedcdrnext AS cpr
+            platinumbodies.cprnext AS cpr
         FROM  platinumbodies
-        WHERE date = currentmonth;
+        WHERE date = pastmonth;
 
         -- so plat info for month m and cpr for m+1 
         -- ok all good so far
@@ -221,11 +209,11 @@ begin
                 currpoolscprwactual."remainingBalance" / currpoolscprwactual.originalface
                 )
             ) / platcurrfacecpr.currface AS weightofpool,
-            currpoolscprwactual.cpr,
+            currpoolscprwactual.actualcpr,
                 (
                 1 -(
                 POWER(
-                    (1 -(currpoolscprwactual.cpr)),
+                    (1 -(currpoolscprwactual.actualcpr)),
                     (cast(1 as float) / cast(12 as float))
                 )
                 )
@@ -239,7 +227,7 @@ begin
             ) * (
                 1 -(
                 POWER(
-                    (1 -(currpoolscprwactual.cpr)),
+                    (1 -(currpoolscprwactual.actualcpr)),
                     (cast(1 as float) / cast(12 as float))
                 )
                 )
@@ -321,18 +309,18 @@ begin
         FROM stepfour
         INNER JOIN platinumbodies
         ON stepfour.platinumcusip = platinumbodies.cusip
-        WHERE stepfour.cpr = platinumbodies.predictedcdrnext
-        AND platinumbodies.date =  currentmonth;
+        WHERE stepfour.cpr = platinumbodies.cprnext
+        AND platinumbodies.date = pastmonth;
 
         RAISE NOTICE '%', countofequals; 
 
         --- This will update platinum bodies cprs now with m + 1
 
         UPDATE platinumbodies
-        SET predictedcdrnext = stepfour.cpr
+        SET cprnext = stepfour.cpr
         FROM stepfour
         WHERE stepfour.platinumcusip = platinumbodies.cusip
-        AND platinumbodies.date =  currentmonth;
+        AND platinumbodies.date =  pastmonth;
 
     END loop;
 
@@ -354,11 +342,11 @@ end;
 $$;
 
 
-call predictedcdrnext('2021-10-01', '2021-09-01');
+call actualcprnext('2021-10-01', '2021-09-01');
 
 --- this can erease all the cprs
 UPDATE platinumbodies
 SET cpr = NULL
-WHERE platinumbodies.date = '2021-10-01';
+WHERE platinumbodies.date = '2021-09-01';
 
 

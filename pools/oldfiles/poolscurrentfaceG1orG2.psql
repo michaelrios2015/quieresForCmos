@@ -17,14 +17,14 @@
 
 \set pastmonth 'date ''2021-09-01'''
 
-\set feddate 'date ''2021-11-10'''
+\set feddate 'date ''2021-12-01'''
 
 -- G1 G1 and one with Type = "SF' and Indicator = 'X" G1
 -- \set indicator '\'X\'' 
 
 -- G2 G2 and one with Type = "SF' and Indicator = 'M" G2
 
-\set indicator '\'M\'' 
+\set indicator '\'X\'' 
 
 
 SELECT   
@@ -205,6 +205,17 @@ FROM
 -- this gets all the pools, eventually will want to limit it to pools with float 
 
 ---------pools with negative current face 
+
+SELECT 
+  COUNT(*)
+FROM pooldataforweb
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1;
+
+
+\copy (SELECT cusip FROM pooldataforweb WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1) to 'C:\Users\micha\g2cwithcurrfloat' csv header;
+
+
+
 
 SELECT 
 -- COUNT(*)

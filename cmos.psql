@@ -23,7 +23,7 @@ FROM ofincmos
 GROUP BY cmo, cusip, date;
 
 
-\set currentmonth 'date ''2021-10-01'''
+\set currentmonth 'date ''2021-11-01'''
 
 --puts my temp table into a real table 
 INSERT INTO uniqueofincmos (cmo, cusip, date, faceincmo)

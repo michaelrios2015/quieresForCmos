@@ -28,11 +28,11 @@ FROM tempfhava;
 create temporary table tempprediction (cusip varchar, totaloutstanding double precision, vpr double precision, vprnext double precision, cdr double precision, cdrnext double precision, cpr double precision, cprnext double precision );
 
 -- change path
-\COPY tempprediction FROM 'C:\Users\micha\cmoDataPrettyForDatabase\data\pools\ginnie_202111_monthly_predictions_roll.csv' DELIMITER ',' CSV HEADER;
+\COPY tempprediction FROM 'C:\Users\micha\databaseCreator\data\pools\ginnie_202112_monthly_predictions_roll.csv' DELIMITER ',' CSV HEADER;
 
 -- need to change the month but other than that I don't 
 INSERT INTO poolpredictions (cusip, "totalOutstanding", vpr, "vprNext", cdr, "cdrNext", cpr, "cprNext", date)
-SELECT cusip, totaloutstanding, vpr, vprnext, cdr, cdrnext, cpr, cprnext, '2021-11-01'
+SELECT cusip, totaloutstanding, vpr, vprnext, cdr, cdrnext, cpr, cprnext, '2021-12-01'
 FROM tempprediction;
 
 
@@ -42,17 +42,26 @@ FROM tempprediction;
 
 create temporary table cprandcdr (cusip varchar, cpr double precision, cdr double precision );
 
-\COPY cprandcdr FROM 'C:\Users\micha\OctCPRCDR.txt' DELIMITER ',';
+\COPY cprandcdr FROM 'C:\Users\micha\Downloads\GNMASMMPrelimNov.txt' DELIMITER ',';
 
 
 INSERT INTO actualcprs (cusip, actualcpr, date)
-SELECT cusip, cpr/100, '2021-10-01'
+SELECT cusip, cpr/100, '2021-11-01'
 FROM cprandcdr;
 
 INSERT INTO actualcdrs (cusip, cdr, date)
-SELECT cusip, cdr/100, '2021-10-01'
+SELECT cusip, cdr/100, '2021-11-01'
 FROM cprandcdr;
 
+
+
+create temporary table cpr (cusip varchar, cpr double precision );
+
+\COPY cpr FROM 'C:\Users\micha\Downloads\SMMTest_Nov.txt' DELIMITER ',';
+
+INSERT INTO actualcprs (cusip, actualcpr, date)
+SELECT cusip, cpr/100, '2021-11-01'
+FROM cpr;
 
 
 --11/24/21 hoping to pipe the data from files straight to cmo database (for the deployed site)

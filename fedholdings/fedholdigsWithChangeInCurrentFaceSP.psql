@@ -10,11 +10,11 @@
 -- it would be better if this was in a stored procedure
 
 --  the dates
-\set currentmonth 'date ''2021-10-01'''
+\set currentmonth 'date ''2021-11-01'''
 
-\set pastmonth 'date ''2021-09-01'''
+\set pastmonth 'date ''2021-10-01'''
 
-\set feddate 'date ''2021-11-10'''
+\set feddate 'date ''2021-12-08'''
 
 -- pools previous factor
 SELECT   

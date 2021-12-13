@@ -1,10 +1,12 @@
--- 12/5/21 this needs to be redone so it has teh future cdr prediction does not look like we are using it at the monent so will leave time the end
+-- 12/5/21 so i had this wrong we want the prediction for the month + 1 or whatI am calling the future month it's hopefully ok now 
 
--- 11/23/21 put it in a stored procedure copied from actual cprs did not bother to rename things should do at some point
+-- 11/23/21 put in stored procedure copied from actualCpr
 
---------------THIS SHOULD WORK 10/7/21
+-------------Was actual with a couple of changes should be predictions
 
--- SHould include something about what need to be loads 
+-- SHOULD BE OK 10/10/21
+
+-- SHould innclude something about what need to be loads 
 
 -- for this i think we just need pools, plats and platcolls all on the same page 
 
@@ -39,10 +41,7 @@
 
 -- using variables will try and trim it down more the next month 11/13/21
 
-
-
-
-create or replace PROCEDURE predictedcdrnext(currentmonth DATE, pastmonth DATE)
+create or replace PROCEDURE predictednextcpr(futuremonth DATE, currentmonth DATE)
 language plpgsql
 as
 $$
@@ -65,7 +64,7 @@ begin
         pools
     INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
     WHERE
-        poolbodies.date = pastmonth;
+        poolbodies.date = currentmonth;
 
 
     -- what we need from plats
@@ -80,7 +79,7 @@ begin
         platinums
         INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
     WHERE
-        platinumbodies.date = pastmonth;
+        platinumbodies.date = currentmonth;
 
     -- what we need from platcolls from month M
 
@@ -94,7 +93,7 @@ begin
     FROM
         platcolls
     WHERE
-        platcolls.born <= pastmonth;
+        platcolls.born <= currentmonth;
 
     -- LIMIT 2;
 
@@ -153,30 +152,20 @@ begin
         currpoolscpr.indicator,
         currpoolscpr.originalface,
         currpoolscpr."remainingBalance",
-        poolpredictions."cdrNext" AS cpr
+        poolpredictions."cprNext" AS cpr
     FROM
         currpoolscpr
     -- I guess it needs to be inner join becuase we need a cpr??
     -- this is where I had to deal with a null value I believe  
     INNER JOIN poolpredictions ON currpoolscpr.cusip = poolpredictions.cusip
-    WHERE poolpredictions.date =  currentmonth;
+    WHERE poolpredictions.date =  futuremonth;
 
     -- This could probably be prettier
     SELECT COUNT(*)
     INTO numberofplatinums    
-    FROM 
-        (
-        SELECT cusip 
-        FROM platinumbodies
-        WHERE DATE = currentmonth
-        ) AS x
-    INNER JOIN
-        (
-        SELECT cusip 
-        FROM platinumbodies
-        WHERE DATE = pastmonth
-        ) AS y
-    ON x.cusip = y.cusip;
+    FROM platinumbodies
+    WHERE date = currentmonth;
+
 
     RAISE NOTICE '%', numberofplatinums; 
 
@@ -191,7 +180,7 @@ begin
         CREATE TEMP TABLE platcpr AS
         SELECT 
             platinumbodies.cusip,
-            platinumbodies.predictedcdrnext AS cpr
+            platinumbodies.predictedcprnext AS cpr
         FROM  platinumbodies
         WHERE date = currentmonth;
 
@@ -321,7 +310,7 @@ begin
         FROM stepfour
         INNER JOIN platinumbodies
         ON stepfour.platinumcusip = platinumbodies.cusip
-        WHERE stepfour.cpr = platinumbodies.predictedcdrnext
+        WHERE stepfour.cpr = platinumbodies.predictedcprnext
         AND platinumbodies.date =  currentmonth;
 
         RAISE NOTICE '%', countofequals; 
@@ -329,7 +318,7 @@ begin
         --- This will update platinum bodies cprs now with m + 1
 
         UPDATE platinumbodies
-        SET predictedcdrnext = stepfour.cpr
+        SET predictedcprnext = stepfour.cpr
         FROM stepfour
         WHERE stepfour.platinumcusip = platinumbodies.cusip
         AND platinumbodies.date =  currentmonth;
@@ -354,11 +343,10 @@ end;
 $$;
 
 
-call predictedcdrnext('2021-10-01', '2021-09-01');
+call predictednextcpr('2021-11-01', '2021-10-01');
 
 --- this can erease all the cprs
 UPDATE platinumbodies
-SET cpr = NULL
+SET predictedcprnext = NULL
 WHERE platinumbodies.date = '2021-10-01';
-
 

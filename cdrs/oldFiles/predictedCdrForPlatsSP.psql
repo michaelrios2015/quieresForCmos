@@ -1,5 +1,3 @@
--- 12/5/21 this needs to be redone so it has teh future cdr prediction does not look like we are using it at the monent so will leave time the end
-
 -- 11/23/21 put it in a stored procedure copied from actual cprs did not bother to rename things should do at some point
 
 --------------THIS SHOULD WORK 10/7/21
@@ -42,7 +40,7 @@
 
 
 
-create or replace PROCEDURE predictedcdrnext(currentmonth DATE, pastmonth DATE)
+create or replace PROCEDURE predictedcdr(currentmonth DATE, pastmonth DATE)
 language plpgsql
 as
 $$
@@ -153,7 +151,7 @@ begin
         currpoolscpr.indicator,
         currpoolscpr.originalface,
         currpoolscpr."remainingBalance",
-        poolpredictions."cdrNext" AS cpr
+        poolpredictions.cdr AS cpr
     FROM
         currpoolscpr
     -- I guess it needs to be inner join becuase we need a cpr??
@@ -191,7 +189,7 @@ begin
         CREATE TEMP TABLE platcpr AS
         SELECT 
             platinumbodies.cusip,
-            platinumbodies.predictedcdrnext AS cpr
+            platinumbodies.predictedcdr AS cpr
         FROM  platinumbodies
         WHERE date = currentmonth;
 
@@ -321,7 +319,7 @@ begin
         FROM stepfour
         INNER JOIN platinumbodies
         ON stepfour.platinumcusip = platinumbodies.cusip
-        WHERE stepfour.cpr = platinumbodies.predictedcdrnext
+        WHERE stepfour.cpr = platinumbodies.predictedcdr
         AND platinumbodies.date =  currentmonth;
 
         RAISE NOTICE '%', countofequals; 
@@ -329,7 +327,7 @@ begin
         --- This will update platinum bodies cprs now with m + 1
 
         UPDATE platinumbodies
-        SET predictedcdrnext = stepfour.cpr
+        SET predictedcdr = stepfour.cpr
         FROM stepfour
         WHERE stepfour.platinumcusip = platinumbodies.cusip
         AND platinumbodies.date =  currentmonth;
@@ -354,7 +352,7 @@ end;
 $$;
 
 
-call predictedcdrnext('2021-10-01', '2021-09-01');
+call predictedcdr('2021-10-01', '2021-09-01');
 
 --- this can erease all the cprs
 UPDATE platinumbodies
