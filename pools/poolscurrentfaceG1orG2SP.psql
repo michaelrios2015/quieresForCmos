@@ -1,10 +1,8 @@
--- so this will be the main function for the pools the indicator just needs to be changed 
+-- this does a pretty good job... if I am going to change it in the future it would be better to break it up
+-- into smaller more readable chunks if we feel confident it does not need to be touched for at least a year or so
+-- we should be fine 
 
--- SET FOR SEP 10/24/21
-
--- this is month M AND G1
-
-
+-- ideally the output would say ginnie one or ginnie two because I forget which is which... 
 
 -- So we want two reports one for pools with Type = "SF' and Indicator = 'M" G2
 -- I wonder if I can do G1 and G2 at the same time....or maybe just make indicator varibale..

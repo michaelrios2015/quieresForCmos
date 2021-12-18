@@ -1,0 +1,357 @@
+-- 12/17/21 this will be what we use when we get the actual CDRS on the 4th business day of each month but have no other data from that month
+-- seems to work :)
+
+-- 11/23/21 put it in a stored procedure copied from actual cprs did not bother to rename things should do at some point
+
+--------------THIS SHOULD WORK 10/7/21
+
+-- SHould include something about what need to be loads 
+
+-- for this i think we just need pools, plats and platcolls all on the same page 
+
+-- The formula
+
+-- SMM = 1 - Power( 1 - CPR / 100, 1/12 ) - so even a minor error in CPR can cause major
+
+-- CPR = 1 - power( 1- SMM, 12 )
+
+-- Step 1 :   Current face of each platinum for month m (We are actually given this as remainingBalance)
+
+-- = sum   original face of pool i in the platinum * factor of pool i for month m
+
+-- Step 2 :   Weight of each pool i in platinum for the month m (we are given this too but calculating is a bit more accurate)
+
+-- = original face of pool i in the platinum * factor of pool i for month m  /  Current face of platinum for month m
+
+-- Step 3 :   SMM of platinum for month m+1
+
+-- = sum weight of each pool i for month m  * SMM of pool i for month m+1
+
+-- Step 4 : CPR of the platinum for month m+1
+
+-- Use SMM to CPR formula
+
+--- first time should be able to COPY and paste the whole thing run these
+
+-- we only have one actual cpr from july so we are trying it with our june ginnie mae data
+-- this first part is pretty much step 1 and two doing things to get the weight of eacg pool..
+
+-- what we need from pools from month M
+
+-- using variables will try and trim it down more the next month 11/13/21
+
+
+
+
+create or replace PROCEDURE actualcdrnext(currentmonth DATE, pastmonth DATE)
+language plpgsql
+as
+$$
+declare
+   countofequals INTEGER := 0;
+   numberofplatinums INTEGER;
+begin
+
+    DROP TABLE IF EXISTS currpoolscpr, currplatscpr, platcollsweneed, ofxfactorcpr, platcurrfacecpr, currpoolscprwactual;
+
+    -- should probably rename stuff at some point
+    CREATE TEMP TABLE currpoolscpr AS
+    SELECT
+        pools.cusip,
+        pools.name,
+        pools.indicator,
+        pools.originalface,
+        poolbodies."remainingBalance"
+    FROM
+        pools
+    INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
+    WHERE
+        poolbodies.date = pastmonth;
+
+
+    -- what we need from plats
+
+    CREATE TEMP TABLE currplatscpr AS
+    SELECT
+        platinums.cusip,
+        platinums.name,
+        platinums.originalface,
+        platinumbodies.remainingbalance
+    FROM
+        platinums
+    INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
+    WHERE
+        platinumbodies.date = pastmonth;
+
+    -- what we need from platcolls from month M
+
+    CREATE TEMP TABLE platcollsweneed AS
+    SELECT
+        platcolls.cusip AS platcusip,
+        platcolls.poolname,
+        platcolls.indicator,
+        platcolls.faceinplatinum,
+        platcolls.born    
+    FROM
+        platcolls
+    WHERE
+        platcolls.born <= pastmonth;
+
+    -- LIMIT 2;
+
+    -- combining the three to get current face of plats for month m 
+
+    CREATE TEMP TABLE ofxfactorcpr AS
+    SELECT
+        platcollsweneed.platcusip,
+        platcollsweneed.poolname,
+        platcollsweneed.indicator,
+        platcollsweneed.faceinplatinum,
+        currpoolscpr.cusip as poolcusip,
+        currpoolscpr."remainingBalance" / currpoolscpr.originalface AS poolfactor,
+        platcollsweneed.faceinplatinum * (
+        currpoolscpr."remainingBalance" / currpoolscpr.originalface
+        ) AS ofxfactor,
+        currplatscpr.cusip  as platinplatcusip,
+        currplatscpr.remainingbalance / currplatscpr.originalface AS platfactor,
+        platcollsweneed.faceinplatinum * (
+        currplatscpr.remainingbalance / currplatscpr.originalface
+        ) AS ofplatxfactor
+    -- so I should be able to make this it's own table limit by born date and be fine
+    FROM
+        platcollsweneed
+    LEFT JOIN currpoolscpr 
+    ON platcollsweneed.poolname = currpoolscpr.name
+    AND platcollsweneed.indicator = currpoolscpr.indicator
+    LEFT JOIN currplatscpr ON platcollsweneed.poolname = currplatscpr.name
+    WHERE
+        (
+        currpoolscpr.cusip IS NOT NULL
+        OR currplatscpr.cusip IS NOT NULL
+        );
+
+
+    -- summing the originl face X factor
+    CREATE TEMP TABLE platcurrfacecpr AS
+    SELECT
+        platcusip,
+        SUM(
+            COALESCE(ofxfactor, 0) + COALESCE(ofplatxfactor, 0)
+        ) / 100 AS currface
+    FROM ofxfactorcpr
+    -- WHERE platcusip = '36225A2E9'
+    GROUP BY
+        platcusip;
+
+    -- current pools with cpr for month M + 1, will need in next steps 
+
+    -- so here I can in theory go from actual to predicted to predicted next
+    -- would need a variable for the table and column
+    CREATE TEMP TABLE currpoolscprwactual AS
+    SELECT
+        currpoolscpr.cusip,
+        currpoolscpr.name,
+        currpoolscpr.indicator,
+        currpoolscpr.originalface,
+        currpoolscpr."remainingBalance",
+        actualcdrs.cdr AS cpr
+    FROM
+        currpoolscpr
+    -- I guess it needs to be inner join becuase we need a cpr??
+    -- this is where I had to deal with a null value I believe  
+    INNER JOIN actualcdrs ON currpoolscpr.cusip = actualcdrs.cusip
+    WHERE actualcdrs.date =  currentmonth;
+
+    -- This could probably be prettier
+    SELECT COUNT(*)
+    INTO numberofplatinums     
+    FROM platinumbodies
+    WHERE DATE = pastmonth;
+
+    RAISE NOTICE '%', numberofplatinums; 
+
+    WHILE numberofplatinums > countofequals loop
+
+        ---------------------------------------------------------------------
+        -- after first time uncomment from here and run 
+        DROP TABLE IF EXISTS platcpr, currplatswithcpr, almoststepthree, stepthree, stepfour;
+
+        -- so the cprs are for month + 1
+
+        CREATE TEMP TABLE platcpr AS
+        SELECT 
+            platinumbodies.cusip,
+            platinumbodies.cdrnext AS cpr
+        FROM  platinumbodies
+        WHERE date = pastmonth;
+
+        -- so plat info for month m and cpr for m+1 
+        -- ok all good so far
+
+        CREATE TEMP TABLE currplatswithcpr AS
+        SELECT
+            currplatscpr.cusip,
+            currplatscpr.name,
+            currplatscpr.originalface,
+            currplatscpr.remainingbalance,
+            platcpr.cpr
+        FROM currplatscpr
+        INNER JOIN platcpr ON currplatscpr.cusip = platcpr.cusip;
+
+        -- step three without summing
+
+        CREATE TEMP TABLE almoststepthree AS
+        SELECT
+            platcollsweneed.platcusip AS platinumcusip,
+            platcollsweneed.poolname,
+            platcollsweneed.indicator,
+            currpoolscprwactual.cusip as poolcusip,
+            (
+                platcollsweneed.faceinplatinum * (
+                currpoolscprwactual."remainingBalance" / currpoolscprwactual.originalface
+                )
+            ) / platcurrfacecpr.currface AS weightofpool,
+            currpoolscprwactual.cpr,
+                (
+                1 -(
+                POWER(
+                    (1 -(currpoolscprwactual.cpr)),
+                    (cast(1 as float) / cast(12 as float))
+                )
+                )
+            ) AS poolsmm,
+            (
+                (
+                platcollsweneed.faceinplatinum * (
+                    currpoolscprwactual."remainingBalance" / currpoolscprwactual.originalface
+                )
+                ) / platcurrfacecpr.currface
+            ) * (
+                1 -(
+                POWER(
+                    (1 -(currpoolscprwactual.cpr)),
+                    (cast(1 as float) / cast(12 as float))
+                )
+                )
+            ) as weightxpoolssm,
+            currplatswithcpr.cusip as platcusip,
+            (
+                platcollsweneed.faceinplatinum * (currplatswithcpr.remainingbalance / currplatswithcpr.originalface)
+            ) / platcurrfacecpr.currface AS weightofplat,
+            currplatswithcpr.cpr AS platcpr,
+            (
+                1 -(
+                POWER(
+                    (1 -(currplatswithcpr.cpr)),
+                    (cast(1 as float) / cast(12 as float))
+                )
+                )
+            ) AS platsmm,
+            (
+                (
+                platcollsweneed.faceinplatinum * (currplatswithcpr.remainingbalance / currplatswithcpr.originalface)
+                ) / platcurrfacecpr.currface
+            ) * (
+                1 -(
+                POWER(
+                    (1 -(currplatswithcpr.cpr)),
+                    (cast(1 as float) / cast(12 as float))
+                )
+                )
+            ) as weightxplatssm
+        -- would need to use same table here  
+        FROM
+            platcollsweneed
+        INNER JOIN platcurrfacecpr
+            ON platcollsweneed.platcusip = platcurrfacecpr.platcusip
+        LEFT JOIN currpoolscprwactual
+            ON platcollsweneed.poolname = currpoolscprwactual.name
+            AND platcollsweneed.indicator = currpoolscprwactual.indicator
+        LEFT JOIN currplatswithcpr ON platcollsweneed.poolname = currplatswithcpr.name
+            WHERE
+                (
+                currpoolscprwactual.cusip IS NOT NULL
+                OR currplatswithcpr.cusip IS NOT NULL
+                )
+            -- if it is zero it probably should not be there 
+            AND platcurrfacecpr.currface > 0
+            -- AND platcollsweneed.cusip = '36225A2E9'
+        ORDER BY
+            platcollsweneed.poolname;
+
+        ----------
+        -- summing almost step three to get step three
+
+        CREATE TEMP TABLE stepthree AS
+        SELECT
+            almoststepthree.platinumcusip,
+            -- not sure why we divide by 100
+            SUM(
+                COALESCE(almoststepthree.weightxpoolssm, 0) + COALESCE(almoststepthree.weightxplatssm, 0)
+            ) / 100 AS smm
+        FROM almoststepthree
+        GROUP BY
+            almoststepthree.platinumcusip;
+
+
+        --  just a temp table 
+        CREATE TEMP TABLE stepfour AS
+        SELECT 
+            platinumcusip, 
+            (1 - POWER((1 - smm), 12)) AS cpr 
+        FROM stepthree;
+
+
+        ---------- so I can use this to see if the tables are equal then run the above to update then rerun the query
+
+        --  this would also need a varible to now which column of platinumbodies to put it in
+        
+        SELECT COUNT(*) 
+        INTO countofequals 
+        FROM stepfour
+        INNER JOIN platinumbodies
+        ON stepfour.platinumcusip = platinumbodies.cusip
+        WHERE stepfour.cpr = platinumbodies.cdrnext
+        AND platinumbodies.date =  pastmonth;
+
+        RAISE NOTICE '%', countofequals; 
+
+        --- This will update platinum bodies cprs now with m + 1
+
+        UPDATE platinumbodies
+        SET cdrnext = stepfour.cpr
+        FROM stepfour
+        WHERE stepfour.platinumcusip = platinumbodies.cusip
+        AND platinumbodies.date =  pastmonth;
+
+    END loop;
+
+    DROP TABLE IF EXISTS 
+        currpoolscpr, 
+        currplatscpr, 
+        platcollsweneed, 
+        ofxfactorcpr, 
+        platcurrfacecpr, 
+        currpoolscprwactual,
+        platcpr, 
+        currplatswithcpr, 
+        almoststepthree, 
+        stepthree, 
+        stepfour;
+
+end;
+
+$$;
+
+
+call actualcdrnext('2021-11-01', '2021-10-01');
+
+--- this can erease all the cprs
+UPDATE platinumbodies
+SET cpr = NULL
+WHERE platinumbodies.date = '2021-10-01';
+
+
+ALTER TABLE platinumbodies
+ADD COLUMN cdrnext double precision;
+

@@ -25,16 +25,20 @@
 
 -- G2: G2 and one with Type = "SF' and Indicator = 'M" G2
 
+-- cusip,name,indicator,type,issuedate,currface,cfincmo,cfinfed,cfinplat,coupon,gwac,wala,wam,va,twomonthspastactcpr,pastactcpr,curractualcpr,cpractnext,twomonthspastpredictedcpr,pastpredictedcpr,currpredictedcpr,futurepredictedcpr,futurepredictedcprnext,curractualcdr,futureactualcdr,currcdrprediction,futurecdrprediction,date
 
-create or replace PROCEDURE outputplats(currentmonth DATE, pastmonth DATE, feddate DATE, _indicator VARCHAR)
+
+create or replace PROCEDURE outputplats(currentmonth DATE, feddate DATE, _indicator VARCHAR)
 language plpgsql
 as
 $$
 declare
    numberofnegatives INTEGER;
+   pastmonth DATE := currentmonth - interval '1 month' * 1;
+   twomonthspast DATE := currentmonth - interval '1 month' * 2;
 begin
 
-  DROP TABLE IF EXISTS platscurr, pastdata, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
+  DROP TABLE IF EXISTS platscurr, twomonthpastdata, pastdata, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
 
   -- ONLY TBA Elig ones 
   CREATE TEMP TABLE platscurr AS
@@ -57,9 +61,8 @@ begin
       platinumbodies.predictedcpr,
       platinumbodies.predictedcprnext,
       platinumbodies.cdr,
+      platinumbodies.cdrnext,
       platinumbodies.predictedcdr,
-      platinumbodies.predictedcdrnext,
-      platinumbodies.istbaelig,
       platinumbodies.date 
   FROM platinums 
   INNER JOIN platinumbodies
@@ -70,6 +73,10 @@ begin
   AND platinumbodies.istbaelig IS TRUE;
 
 
+  CREATE TEMP TABLE twomonthpastdata AS
+  SELECT *
+  FROM platinumbodies
+  WHERE platinumbodies.date = pastmonth;
 
   -- for info from the past month
   CREATE TEMP TABLE pastdata AS
@@ -77,10 +84,16 @@ begin
   FROM platinumbodies
   WHERE platinumbodies.date = pastmonth;
 
+
+
   -- I think there are platinums in here too but should check and take out if not
   CREATE TEMP TABLE poolfhavascurr AS
-  SELECT *
+  SELECT
+     poolfhavas.cusip,
+     poolfhavas.va
   FROM poolfhavas
+  INNER JOIN platscurr 
+  ON poolfhavas.cusip = platscurr.cusip
   WHERE poolfhavas.date = currentmonth;
 
 
@@ -141,22 +154,25 @@ begin
     platscurr.wala,
     platscurr.wam,
     poolfhavascurr.va,
+    twomonthpastdata.cpr AS twomonthspastactcpr,
     pastdata.cpr AS pastactcpr,
     platscurr.cpr,
     platscurr.cprnext,
-    -- needs to be filled in (prediction from 2 month ago)
-    NULL AS cprpastprediction,
+    -- needs to be filled in (prediction from 3 month ago)
+    twomonthpastdata.predictedcpr AS cprpastprediction,
     pastdata.predictedcpr AS currcprprediction,
     platscurr.predictedcpr AS futurecprprediction,
     platscurr.predictedcprnext AS futurecprnextprediction,
     platscurr.cdr,
+    platscurr.cdrnext,
     pastdata.predictedcdr AS currcdrprediction,
     platscurr.predictedcdr AS cdrprediction,
     platscurr.date
   FROM
     platscurr
-    LEFT JOIN pastdata ON (platscurr.cusip = pastdata.cusip)
-    LEFT JOIN poolfhavascurr ON (platscurr.cusip = poolfhavascurr.cusip)
+  LEFT JOIN twomonthpastdata ON (platscurr.cusip = twomonthpastdata.cusip)  
+  LEFT JOIN pastdata ON (platscurr.cusip = pastdata.cusip)
+  LEFT JOIN poolfhavascurr ON (platscurr.cusip = poolfhavascurr.cusip)
     LEFT JOIN ofinplatinum 
       ON platscurr.name = ofinplatinum.poolname
     LEFT JOIN ofpoolincmo ON platscurr.cusip = ofpoolincmo.cusip 
@@ -190,7 +206,7 @@ begin
 
   EXECUTE 'COPY (SELECT * FROM platswithnegativefloat) to ''C:\Users\Public\ginnieplatswithnegativefloat' || _indicator || ''' csv header';
 
-  DROP TABLE IF EXISTS platscurr, pastdata, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
+  DROP TABLE IF EXISTS platscurr, twomonthpastdata, pastdata, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
 
 
 end;
@@ -198,6 +214,11 @@ end;
 $$;
 
 -- SEEMS to work fine :)
+
+call outputplats('2021-10-01', '2021-12-08', 'M');
+
+
+call outputplats('2021-10-01', '2021-12-08', 'X');
 
 call outputplats('2021-10-01', '2021-09-01', '2021-12-01', 'M');
 
