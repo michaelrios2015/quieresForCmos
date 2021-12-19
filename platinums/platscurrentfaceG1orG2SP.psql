@@ -36,9 +36,10 @@ declare
    numberofnegatives INTEGER;
    pastmonth DATE := currentmonth - interval '1 month' * 1;
    twomonthspast DATE := currentmonth - interval '1 month' * 2;
+   threemonthspast DATE := currentmonth - interval '1 month' * 3;
 begin
 
-  DROP TABLE IF EXISTS platscurr, twomonthpastdata, pastdata, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
+  DROP TABLE IF EXISTS platscurr, threemonthpastdata, twomonthpastdata, pastdata, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
 
   -- ONLY TBA Elig ones 
   CREATE TEMP TABLE platscurr AS
@@ -72,11 +73,16 @@ begin
   AND platinums.type = 'SP'
   AND platinumbodies.istbaelig IS TRUE;
 
+  CREATE TEMP TABLE threemonthpastdata AS
+  SELECT *
+  FROM platinumbodies
+  WHERE platinumbodies.date = threemonthspast;
+
 
   CREATE TEMP TABLE twomonthpastdata AS
   SELECT *
   FROM platinumbodies
-  WHERE platinumbodies.date = pastmonth;
+  WHERE platinumbodies.date = twomonthspast;
 
   -- for info from the past month
   CREATE TEMP TABLE pastdata AS
@@ -158,7 +164,7 @@ begin
     pastdata.cpr AS pastactcpr,
     platscurr.cpr,
     platscurr.cprnext,
-    -- needs to be filled in (prediction from 3 month ago)
+    threemonthpastdata.predictedcpr AS cprtwomonthspastprediction,
     twomonthpastdata.predictedcpr AS cprpastprediction,
     pastdata.predictedcpr AS currcprprediction,
     platscurr.predictedcpr AS futurecprprediction,
@@ -170,13 +176,13 @@ begin
     platscurr.date
   FROM
     platscurr
+  LEFT JOIN threemonthpastdata ON (platscurr.cusip = threemonthpastdata.cusip)   
   LEFT JOIN twomonthpastdata ON (platscurr.cusip = twomonthpastdata.cusip)  
   LEFT JOIN pastdata ON (platscurr.cusip = pastdata.cusip)
   LEFT JOIN poolfhavascurr ON (platscurr.cusip = poolfhavascurr.cusip)
-    LEFT JOIN ofinplatinum 
-      ON platscurr.name = ofinplatinum.poolname
-    LEFT JOIN ofpoolincmo ON platscurr.cusip = ofpoolincmo.cusip 
-    LEFT JOIN fedholdingscurr ON platscurr.cusip = fedholdingscurr.cusip;  
+  LEFT JOIN ofinplatinum ON platscurr.name = ofinplatinum.poolname
+  LEFT JOIN ofpoolincmo ON platscurr.cusip = ofpoolincmo.cusip 
+  LEFT JOIN fedholdingscurr ON platscurr.cusip = fedholdingscurr.cusip;  
 
   CREATE TEMP TABLE g1platswithcurrfloat AS
   SELECT *
@@ -206,7 +212,7 @@ begin
 
   EXECUTE 'COPY (SELECT * FROM platswithnegativefloat) to ''C:\Users\Public\ginnieplatswithnegativefloat' || _indicator || ''' csv header';
 
-  DROP TABLE IF EXISTS platscurr, twomonthpastdata, pastdata, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
+  DROP TABLE IF EXISTS platscurr, threemonthpastdata, twomonthpastdata, pastdata, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
 
 
 end;

@@ -75,3 +75,20 @@ TRUNCATE g1s, pools;
 \COPY g1s FROM 'C:\Users\micha\cmoDataPretty\data\pools\G1pools_202110.csv' DELIMITER ','  CSV HEADER;
 
 \COPY g1s FROM 'C:\Users\micha\cmoDataPretty\data\platinums\G1plats_202110.csv' DELIMITER ','  CSV HEADER;
+
+
+
+-- 12/18/21 puuting all the data into one table 
+
+
+TRUNCATE ginnies;
+
+\COPY ginnies FROM 'C:\Users\Public\ginnieplatswithcurrfloatM' DELIMITER ','  CSV HEADER;
+
+\COPY ginnies FROM 'C:\Users\Public\ginnieplatswithcurrfloatX' DELIMITER ','  CSV HEADER;
+
+\COPY ginnies FROM 'C:\Users\Public\poolswithcurrfloatM' DELIMITER ','  CSV HEADER;
+
+\COPY ginnies FROM 'C:\Users\Public\poolswithcurrfloatX' DELIMITER ','  CSV HEADER;
+
+
