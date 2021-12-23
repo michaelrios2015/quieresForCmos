@@ -30,37 +30,63 @@
 
 -- Use SMM to CPR formula
 
-\set currentmonth 'date ''2021-11-01'''
-\set pastmonth 'date ''2021-10-01'''
+\set futuremonth 'date ''2021-11-01'''
+\set currentmonth 'date ''2021-10-01'''
 
 
+-- Step One is essentailly done should be good now
+
+
+
+SELECT 
+  cmo,
+  cusip,
+  currface
+INTO TEMP TABLE cmocurrface
+FROM cmos
+INNER JOIN uniqueofincmos
+ON cmos.cmo = uniqueofincmos.cmo
+WHERE date = :currentmonth
+
+-- Step 2 :   Weight of each pool i in CMO for the month m 
+
+
+-- = original face of pool i in the CMO * factor of pool i for month m  /  Current face of CMO for month m
+
+-- so we still need to redo a bunch of it
 
 SELECT
     pools.cusip,
-    pools.name,
-    pools.indicator,
     pools.originalface,
-    poolbodies."remainingBalance"
-INTO TEMP TABLE currpoolscpr 
+    poolbodies."remainingBalance" / pools.originalface AS factor
+INTO TEMP TABLE currpools 
 FROM pools
 INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
-WHERE poolbodies.date = :pastmonth;
+WHERE poolbodies.date = :currentmonth;
 
 
 -- what we need from plats
 
 SELECT
     platinums.cusip,
-    platinums.name,
     platinums.originalface,
-    platinumbodies.remainingbalance
-INTO TEMP TABLE currplatscpr 
+    platinumbodies.remainingbalance / platinums.originalface AS factor
+INTO TEMP TABLE currplats
 FROM platinums
 INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
-WHERE platinumbodies.date = :pastmonth;
+WHERE platinumbodies.date = :currentmonth;
 
 
 -- combining the two to get current face of plats or pools?? for month m 
+
+SELECT *,
+    currpools.originalface * currpools.factor /    
+FROM uniqueofincmos
+INNER JOIN currpools
+ON uniqueofincmos.cusip = currpools.cusip
+
+
+
 
 SELECT
     ofincmos.cmo,

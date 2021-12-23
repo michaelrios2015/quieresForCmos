@@ -158,22 +158,6 @@ begin
     INNER JOIN poolpredictions ON currpoolscpr.cusip = poolpredictions.cusip
     WHERE poolpredictions.date =  futuremonth;
 
-    -- -- This could probably be prettier
-    -- SELECT COUNT(*)
-    -- INTO numberofplatinums    
-    -- FROM 
-    --     (
-    --     SELECT cusip 
-    --     FROM platinumbodies
-    --     WHERE DATE = futuremonth
-    --     ) AS x
-    -- INNER JOIN
-    --     (
-    --     SELECT cusip 
-    --     FROM platinumbodies
-    --     WHERE DATE = currentmonth
-    --     ) AS y
-    -- ON x.cusip = y.cusip;
 
         -- This could probably be prettier
     SELECT COUNT(*)

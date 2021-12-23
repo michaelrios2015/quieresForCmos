@@ -7,132 +7,159 @@
 
 -- so I need the pools and platinums current factor to be correct to use this
 
--- it would be better if this was in a stored procedure
+create or replace PROCEDURE fedholdingscurrface(currentmonth DATE, feddate DATE)
+language plpgsql
+as
+$$
+declare
+   pastmonth DATE := currentmonth - interval '1 month' * 1;
+begin
 
---  the dates
-\set currentmonth 'date ''2021-11-01'''
+    DROP TABLE IF EXISTS 
+        poolsfactorpreviosmonth, 
+        poolsfactorcurrentmonth, 
+        platinumsfactorpreviosmonth,
+        platinumsfactorpreviosmonth,
+        fedholdingscurr,
+        poolsadjustedcurrface,
+        platsadjustedcurrface;
 
-\set pastmonth 'date ''2021-10-01'''
+  
+    -- pools previous factor
+    CREATE TEMP TABLE poolsfactorpreviosmonth AS
+    SELECT   
+        pools.cusip,
+        pools.originalface,
+        poolbodies."remainingBalance",
+        -- calculating the factor on our own
+        poolbodies."remainingBalance" / pools.originalface AS factor, 
+        poolbodies.date
+    FROM pools 
+    INNER JOIN poolbodies
+    ON pools.cusip = poolbodies.cusip 
+    WHERE poolbodies.date = pastmonth;
+    -- LIMIT 10;
 
-\set feddate 'date ''2021-12-08'''
+    -- pools current factor
+    CREATE TEMP TABLE poolsfactorcurrentmonth AS
+    SELECT   
+        pools.cusip,
+        pools.originalface,
+        poolbodies."remainingBalance",
+        -- calculating the factor on our own
+        poolbodies."remainingBalance" / pools.originalface AS factor, 
+        poolbodies.date
+    FROM pools 
+    INNER JOIN poolbodies
+    ON pools.cusip = poolbodies.cusip 
+    WHERE poolbodies.date = currentmonth;
 
--- pools previous factor
-SELECT   
-    pools.cusip,
-    pools.originalface,
-    poolbodies."remainingBalance",
-    -- calculating the factor on our own
-    poolbodies."remainingBalance" / pools.originalface AS factor, 
-    poolbodies.date
-INTO TEMP TABLE poolsfactorpreviosmonth
-FROM pools 
-INNER JOIN poolbodies
-ON pools.cusip = poolbodies.cusip 
-WHERE poolbodies.date = :pastmonth;
--- LIMIT 10;
+    -- platinums previous factor
+    CREATE TEMP TABLE platinumsfactorpreviosmonth AS
+    SELECT   
+        platinums.cusip,
+        platinums.originalface,
+        platinumbodies.remainingbalance,
+        -- calculating the factor on our own
+        platinumbodies.remainingbalance / platinums.originalface AS factor, 
+        platinumbodies.date
+    FROM platinums 
+    INNER JOIN platinumbodies
+    ON platinums.cusip = platinumbodies.cusip 
+    WHERE platinumbodies.date = pastmonth;
+    -- LIMIT 10;
 
--- pools current factor
+    -- platinums current factor
+    CREATE TEMP TABLE platinumsfactorcurrentmonth AS
+    SELECT   
+        platinums.cusip,
+        platinums.originalface,
+        platinumbodies.remainingbalance,
+        -- calculating the factor on our own
+        platinumbodies.remainingbalance / platinums.originalface AS factor, 
+        platinumbodies.date
+    FROM platinums 
+    INNER JOIN platinumbodies
+    ON platinums.cusip = platinumbodies.cusip 
+    WHERE platinumbodies.date = currentmonth;
 
-SELECT   
-    pools.cusip,
-    pools.originalface,
-    poolbodies."remainingBalance",
-    -- calculating the factor on our own
-    poolbodies."remainingBalance" / pools.originalface AS factor, 
-    poolbodies.date
-INTO TEMP TABLE poolsfactorcurrentmonth
-FROM pools 
-INNER JOIN poolbodies
-ON pools.cusip = poolbodies.cusip 
-WHERE poolbodies.date = :currentmonth;
+    -- the fed holdings to be modified
+    CREATE TEMP TABLE fedholdingscurr AS
+    SELECT * 
+    FROM fedholdings
+    WHERE asofdate = feddate;
 
--- platinums previous factor
+    -- calculate new current face for pools
+    CREATE TEMP TABLE poolsadjustedcurrface AS
+    SELECT 
+        fedholdingscurr.asofdate,
+        fedholdingscurr.cusip,
+        fedholdingscurr.currentfacevalue,
+        fedholdingscurr.isaggregated,
+        currentfacevalue/poolsfactorpreviosmonth.factor AS originalface,
+        (currentfacevalue/poolsfactorpreviosmonth.factor) * poolsfactorcurrentmonth.factor AS currentface
+    FROM fedholdingscurr
+    INNER JOIN poolsfactorpreviosmonth
+    ON fedholdingscurr.cusip = poolsfactorpreviosmonth.cusip
+    INNER JOIN poolsfactorcurrentmonth
+    ON fedholdingscurr.cusip = poolsfactorcurrentmonth.cusip;
+    -- LIMIT 2;
 
-SELECT   
-    platinums.cusip,
-    platinums.originalface,
-    platinumbodies.remainingbalance,
-    -- calculating the factor on our own
-    platinumbodies.remainingbalance / platinums.originalface AS factor, 
-    platinumbodies.date
-INTO TEMP TABLE platinumsfactorpreviosmonth
-FROM platinums 
-INNER JOIN platinumbodies
-ON platinums.cusip = platinumbodies.cusip 
-WHERE platinumbodies.date = :pastmonth;
--- LIMIT 10;
+    -- calculate new current face for plats
+    CREATE TEMP TABLE platsadjustedcurrface AS
+    SELECT 
+        fedholdingscurr.asofdate,
+        fedholdingscurr.cusip,
+        fedholdingscurr.currentfacevalue,
+        fedholdingscurr.isaggregated,
+        currentfacevalue/platinumsfactorpreviosmonth.factor AS originalface,
+        (currentfacevalue/platinumsfactorpreviosmonth.factor) * platinumsfactorcurrentmonth.factor AS currentface
+    FROM fedholdingscurr
+    INNER JOIN platinumsfactorpreviosmonth
+    ON fedholdingscurr.cusip = platinumsfactorpreviosmonth.cusip
+    INNER JOIN platinumsfactorcurrentmonth
+    ON fedholdingscurr.cusip = platinumsfactorcurrentmonth.cusip;
+    -- LIMIT 2;
 
--- platinums current factor
+    -- update the pools in fed
 
-SELECT   
-    platinums.cusip,
-    platinums.originalface,
-    platinumbodies.remainingbalance,
-    -- calculating the factor on our own
-    platinumbodies.remainingbalance / platinums.originalface AS factor, 
-    platinumbodies.date
-INTO TEMP TABLE platinumsfactorcurrentmonth
-FROM platinums 
-INNER JOIN platinumbodies
-ON platinums.cusip = platinumbodies.cusip 
-WHERE platinumbodies.date = :currentmonth;
+    UPDATE fedholdings
+    SET currentfacevalue = platsadjustedcurrface.currentface
+    FROM platsadjustedcurrface
+    WHERE fedholdings.cusip = platsadjustedcurrface.cusip
+    AND fedholdings.asofdate = feddate;
 
--- the fed holdings to be modified
+    -- update the plats in fed
 
-SELECT * 
-INTO TEMP TABLE fedholdingscurr
-FROM fedholdings
-WHERE asofdate = :feddate;
+    UPDATE fedholdings
+    SET currentfacevalue = poolsadjustedcurrface.currentface
+    FROM poolsadjustedcurrface
+    WHERE fedholdings.cusip = poolsadjustedcurrface.cusip
+    AND fedholdings.asofdate = feddate;
 
--- calculate new current face for pools
+    DROP TABLE IF EXISTS 
+        poolsfactorpreviosmonth, 
+        poolsfactorcurrentmonth, 
+        platinumsfactorpreviosmonth,
+        platinumsfactorpreviosmonth,
+        fedholdingscurr,
+        poolsadjustedcurrface,
+        platsadjustedcurrface;
 
-SELECT 
-    fedholdingscurr.asofdate,
-    fedholdingscurr.cusip,
-    fedholdingscurr.currentfacevalue,
-    fedholdingscurr.isaggregated,
-    currentfacevalue/poolsfactorpreviosmonth.factor AS originalface,
-    (currentfacevalue/poolsfactorpreviosmonth.factor) * poolsfactorcurrentmonth.factor AS currentface
-INTO TEMP TABLE poolsadjustedcurrface
-FROM fedholdingscurr
-INNER JOIN poolsfactorpreviosmonth
-ON fedholdingscurr.cusip = poolsfactorpreviosmonth.cusip
-INNER JOIN poolsfactorcurrentmonth
-ON fedholdingscurr.cusip = poolsfactorcurrentmonth.cusip;
--- LIMIT 2;
 
--- calculate new current face for plats
+end;
 
-SELECT 
-    fedholdingscurr.asofdate,
-    fedholdingscurr.cusip,
-    fedholdingscurr.currentfacevalue,
-    fedholdingscurr.isaggregated,
-    currentfacevalue/platinumsfactorpreviosmonth.factor AS originalface,
-    (currentfacevalue/platinumsfactorpreviosmonth.factor) * platinumsfactorcurrentmonth.factor AS currentface
-INTO TEMP TABLE platsadjustedcurrface
-FROM fedholdingscurr
-INNER JOIN platinumsfactorpreviosmonth
-ON fedholdingscurr.cusip = platinumsfactorpreviosmonth.cusip
-INNER JOIN platinumsfactorcurrentmonth
-ON fedholdingscurr.cusip = platinumsfactorcurrentmonth.cusip;
--- LIMIT 2;
+$$;
 
--- update the pools in fed
 
-UPDATE fedholdings
-SET currentfacevalue = platsadjustedcurrface.currentface
-FROM platsadjustedcurrface
-WHERE fedholdings.cusip = platsadjustedcurrface.cusip
-AND fedholdings.asofdate = :feddate;
 
--- update the plats in fed
 
-UPDATE fedholdings
-SET currentfacevalue = poolsadjustedcurrface.currentface
-FROM poolsadjustedcurrface
-WHERE fedholdings.cusip = poolsadjustedcurrface.cusip
-AND fedholdings.asofdate = :feddate;
+call fedholdingscurrface('2021-11-01', '2021-12-15');
+
+
+
+
+
 
 ---------------------------------------------------------
 -- this was older stuff from that I don't think I used 11/14/21

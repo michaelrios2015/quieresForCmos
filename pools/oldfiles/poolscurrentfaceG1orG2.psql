@@ -120,7 +120,7 @@ GROUP BY
 -- adding original face in cmos 
 
 -- think i need more cmos 10/24/21
--- SO we use the CMOS for month M-1 though just using Month M seems fine too
+-- SO we use the CMOS for month M-1 though just using Month M seems fine too.. would like to double chek on that
 
 SELECT
     cusip,

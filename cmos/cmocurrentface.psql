@@ -1,0 +1,127 @@
+-- so I am going to need the current factors for pools and plats
+
+
+--  join them to cmos to get current face in cmo
+
+-- sum group by cmo and bamo hopefully 
+----making temp tables
+-- what we need from pools
+-- name and indicator to join with platcoll
+-- original face and remaining balance 
+
+
+-- seems to be working
+-- I think this will work fine with past months as long as the cmo is not in the cmos table
+-- yeah seems fine just need to be carful loading the cmos from uniqueofincmos certainley would not be bad to add some more guardrails but we should be OK for the moment
+
+create or replace PROCEDURE currfacecmo( currentmonth DATE )
+language plpgsql
+as
+$$
+declare
+begin
+
+    DROP TABLE IF EXISTS currpools, currplats, cmopoolcurrent, cmoplatcurrent, cmocurrface;
+
+    CREATE TEMP TABLE currpools AS
+    SELECT
+        pools.cusip,
+        poolbodies."remainingBalance" / pools.originalface as factor
+    FROM pools
+    INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
+    WHERE poolbodies.date = currentmonth;
+
+    -- what we need from plats
+    CREATE TEMP TABLE currplats AS
+    SELECT
+        platinums.cusip,
+        platinumbodies.remainingbalance / platinums.originalface AS factor
+    FROM platinums
+    INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
+    WHERE platinumbodies.date = currentmonth;
+
+    CREATE TEMP TABLE cmopoolcurrent AS
+    SELECT 
+        cmo,
+        SUM(faceincmo * factor) AS currface
+    FROM uniqueofincmos
+    INNER JOIN currpools
+    ON uniqueofincmos.cusip = currpools.cusip
+    WHERE uniqueofincmos.collapsed is null
+    GROUP BY cmo;
+
+    CREATE TEMP TABLE cmoplatcurrent  AS
+    SELECT 
+        cmo,
+        SUM(faceincmo * factor) AS currface
+    FROM uniqueofincmos
+    INNER JOIN currplats
+    ON uniqueofincmos.cusip = currplats.cusip
+    WHERE uniqueofincmos.collapsed is null
+    GROUP BY cmo;
+
+    CREATE TEMP TABLE cmocurrface AS
+    SELECT 
+        COALESCE(cmopoolcurrent.cmo, cmoplatcurrent.cmo) AS cmo,
+        COALESCE(cmopoolcurrent.currface, 0) + COALESCE(cmoplatcurrent.currface, 0) AS currface    
+    FROM cmopoolcurrent
+    FULL JOIN cmoplatcurrent
+    ON cmopoolcurrent.cmo = cmoplatcurrent.cmo;
+
+    UPDATE cmos
+    SET currface = cmocurrface.currface
+    FROM cmocurrface
+    WHERE cmocurrface.cmo = cmos.cmo
+    AND cmos.date = currentmonth;
+
+    DROP TABLE IF EXISTS currpools, currplats, cmopoolcurrent, cmoplatcurrent, cmocurrface;
+
+
+end;
+
+$$;
+
+call currfacecmo('2021-11-01');
+
+-- there are platinums in cmos
+
+SELECT count(*) from uniqueofincmos INNER JOIN platinums ON uniqueofincmos.cusip = platinums.cusip limit 2; 
+
+
+-- so we are using this as the new cmo table the old one seemed wacky this may have to change as well
+-- but should be enough to get us started 
+
+CREATE TABLE cmos (
+   cmo varchar NOT NULL,
+   currface double precision,
+   cpr double precision,
+   predictedcpr double precision,
+   predictedcprnext double precision,
+   predictedvpr double precision,
+   predictedvprnext double precision,
+   predictedcdr double precision,
+   predictedcdrnext double precision,
+   date date NOT NULL,
+   PRIMARY KEY (cmo, date)
+);
+
+-- so I ahve a cmo table and I need to load it with the cmos and a date 
+
+-- insert into items_ver(item_id, item_group, name)
+-- select * from items where item_id=2;
+
+-- not a clue why it made me cast the date here but not in others??
+-- does not really matter though it seeded the database with the cmos and dates so we are able to proceed
+INSERT INTO cmos (cmo, date)
+SELECT DISTINCT cmo, TO_DATE('20211101','YYYYMMDD')
+FROM uniqueofincmos
+WHERE uniqueofincmos.collapsed is null
+AND uniqueofincmos.date <= '2021-11-01';
+-- INSERT INTO poolfhavas (cusip, fha, va, rural, indian, date)
+-- SELECT cusip, fha, va, rural, indian, '2021-11-01'
+-- FROM tempfhava;
+
+
+-- if i need to reset the currface
+UPDATE cmos
+SET currface = null;
