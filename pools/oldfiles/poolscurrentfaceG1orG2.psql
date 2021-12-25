@@ -13,18 +13,18 @@
 
 -- now with variables
 
-\set currentmonth 'date ''2021-10-01'''
+\set currentmonth 'date ''2021-11-01'''
 
-\set pastmonth 'date ''2021-09-01'''
+\set pastmonth 'date ''2021-10-01'''
 
-\set feddate 'date ''2021-12-01'''
+\set feddate 'date ''2021-12-15'''
 
 -- G1 G1 and one with Type = "SF' and Indicator = 'X" G1
 -- \set indicator '\'X\'' 
 
 -- G2 G2 and one with Type = "SF' and Indicator = 'M" G2
 
-\set indicator '\'X\'' 
+-- \set indicator '\'X\'' 
 
 
 SELECT   
@@ -48,9 +48,9 @@ FROM pools
 INNER JOIN poolbodies
 ON pools.cusip = poolbodies.cusip 
 WHERE poolbodies.date = :currentmonth
-AND pools.indicator = :indicator
-AND pools.type = 'SF'
-AND pools.istbaelig IS TRUE;
+-- AND pools.indicator = :indicator
+-- AND pools.type = 'SF'
+-- AND pools.istbaelig IS TRUE;
 -- LIMIT 10;
 
 

@@ -1,0 +1,195 @@
+-- this does a pretty good job... if I am going to change it in the future it would be better to break it up
+-- into smaller more readable chunks if we feel confident it does not need to be touched for at least a year or so
+-- we should be fine 
+
+-- ideally the output would say ginnie one or ginnie two because I forget which is which... 
+
+-- So we want two reports one for pools with Type = "SF' and Indicator = 'M" G2
+-- I wonder if I can do G1 and G2 at the same time....or maybe just make indicator varibale..
+
+-- ONLY WANT TBA ELIG ONES FOR MONTH M
+
+-- now with variables
+
+
+create or replace PROCEDURE countpoolswithcurrface (currentmonth DATE, feddate DATE)
+language plpgsql
+as
+$$
+declare
+   numberofpools INTEGER;
+begin
+
+
+DROP TABLE IF EXISTS poolscurr, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, pooldataforweb;
+
+
+  -- cusip, name, indicator, type, issuedate, currface, coupon, gwac, wala, wam, date
+  CREATE TEMP TABLE poolscurr AS
+  SELECT   
+      pools.cusip,
+      pools.name,
+      pools.indicator,
+      pools.type,
+      pools.issuedate,
+      pools.originalface,
+      poolbodies."remainingBalance" AS currface,
+      poolbodies."remainingBalance" / pools.originalface AS factor, 
+      poolbodies."interestRate" AS coupon,
+      poolbodies."GWAC" AS gwac,
+      poolbodies."WAM" AS wam,
+      poolbodies."WALA" AS wala,
+      poolbodies.date 
+  FROM pools 
+  INNER JOIN poolbodies
+  ON pools.cusip = poolbodies.cusip 
+  WHERE poolbodies.date =  currentmonth;
+
+  RAISE NOTICE 'CREATED TEMP TABLE';
+  
+  -- Measured in pennies
+  CREATE TEMP TABLE ofinplatinum AS
+  SELECT 
+      count(*),
+      poolname,
+      indicator,
+      SUM(faceinplatinum/100) as ofinplat 
+  FROM platcolls
+  WHERE born <= currentmonth
+  GROUP BY poolname, indicator;
+
+  -- adding original face in cmos 
+  -- SO we use the CMOS for month M-1 though just using Month M seems fine too
+  CREATE TEMP TABLE ofpoolincmo AS
+  SELECT
+      cusip,
+      SUM(faceincmo) AS ofincmo
+  FROM uniqueofincmos
+  WHERE date <= currentmonth
+  -- Probably just not collapsed?? but I guess there could be a scenario where one collapses in the future
+  AND ( collapsed > currentmonth OR collapsed IS NULL) 
+  GROUP BY cusip;
+
+  --temp table, fed holdings has only one per pool?? I guess so 
+  -- SO Month M + 1.5
+  CREATE TEMP TABLE fedholdingscurr AS
+  SELECT * 
+  FROM fedholdings
+  WHERE fedholdings.asofdate =  feddate;
+
+  CREATE TEMP TABLE poolfhavascurr AS
+  SELECT *
+  FROM poolfhavas
+  WHERE poolfhavas.date =  currentmonth;
+
+  RAISE NOTICE 'PUTTING IT ALL TOGTHER';
+    
+  -- cusip,name,indicator,type,issuedate,currface,cfincmo,cfinfed,cfinplat,coupon,gwac,wala,wam,va,
+  CREATE TEMP TABLE pooldataforweb AS
+  SELECT
+    poolscurr.cusip,
+    poolscurr.name,
+    poolscurr.indicator,
+    poolscurr.type,
+    poolscurr.issuedate,
+    poolscurr.currface,
+    ofpoolincmo.ofincmo * poolscurr.factor AS cfincmo,
+    fedholdingscurr.currentfacevalue AS cfinfed,
+    ofinplatinum.ofinplat * poolscurr.factor AS cfinplat,
+    poolscurr.coupon,
+    poolscurr.gwac,
+    poolscurr.wala,
+    poolscurr.wam,
+    poolfhavascurr.va,
+    poolscurr.date
+  FROM poolscurr
+  LEFT JOIN poolfhavascurr ON (poolscurr.cusip = poolfhavascurr.cusip)
+  LEFT JOIN ofinplatinum 
+    ON poolscurr.name = ofinplatinum.poolname
+    AND poolscurr.indicator = ofinplatinum.indicator
+  LEFT JOIN ofpoolincmo ON poolscurr.cusip = ofpoolincmo.cusip 
+  LEFT JOIN fedholdingscurr ON poolscurr.cusip = fedholdingscurr.cusip;  
+
+
+  -- twomonthspastactcpr, pastactcpr,cpr,cprnext,
+  -- CREATE TEMP TABLE pooldataforwebtwo AS
+  SELECT COUNT(*)
+  INTO  numberofpools 
+  FROM pooldataforweb  
+  WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1;
+  
+  RAISE NOTICE '%', numberofpools; 
+
+DROP TABLE IF EXISTS poolscurr, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, pooldataforweb;
+
+end;
+
+$$;
+
+
+call countpoolswithcurrface ( '2021-11-01', '2021-12-15' );
+
+
+
+  -- SELECT * 
+  -- FROM uniqueofincmos 
+  -- WHERE cusip IN ( '36203LT28', '36223NXZ2', '36224JNE8',  
+  --   '36203QC66', '36203LXA5', '36203GF99',  '36224SHV7', '36224TLK4', '36203NRN0', 
+  --   '36203AUX2', '36223WQM9', '36224KR43', '36223MAP1', '36203HCS8', '36224X6X4', '36203JHT7' )
+  -- AND collapsed IS NULL 
+  -- ORDER BY cmo;
+
+
+-- just counting the ones that still have float 
+SELECT COUNT (*)
+FROM pooldataforweb
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) > 1;
+
+-- counting the ones that have negative float this should not happen 
+SELECT COUNT(*)
+FROM pooldataforweb
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1
+LIMIT 10;
+
+SELECT *,
+  currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) AS float
+FROM pooldataforweb
+WHERE currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) < -1
+ORDER BY currface - COALESCE(cfincmo, 0) - COALESCE(cfinfed, 0) - COALESCE(cfinplat, 0) ASC
+LIMIT 100;
+
+
+ 
+\COPY (SELECT cusip FROM pools WHERE type = 'SF' and indicator = 'M') to 'C:\Users\micha\g2mwithcurrentfloat' csv header;
+
+\COPY (SELECT cusip FROM pools WHERE type = 'SF' and indicator = 'C') to 'C:\Users\micha\g2c' csv header;
+
+\COPY (SELECT cusip FROM pools where indicator = 'X') to 'C:\Users\micha\g1x' csv header;
+
+\COPY (SELECT * FROM g1s) to 'C:\Users\micha\g1xwithcurrfloat' csv header;
+
+SELECT cusip
+FROM pools
+WHERE type = 'SF'
+and indicator = 'M'
+LIMIT 2;
+
+
+SELECT cusip
+FROM pools
+WHERE type = 'SF'
+and indicator = 'M'
+LIMIT 2;
+
+
+\COPY (SELECT cusip FROM pools where indicator = 'X') to 'C:\Users\micha\g1x' csv header;
+
+
+
+
+
+
+
+
+update salereg1 
+\set expdate = '2021-10-01' + interval '1 month' * 2;

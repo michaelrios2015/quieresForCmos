@@ -34,22 +34,23 @@
 \set currentmonth 'date ''2021-10-01'''
 
 
--- Step One is essentailly done should be good now
-
-
+-- Step 1 :   Current face of each CMO for month m (Just calcilated that so I can probably use it )
+-- Is essentailly done should be good now
 
 SELECT 
-  cmo,
+  uniqueofincmos.cmo,
   cusip,
-  currface
+  faceincmo,
+  currface,
+  cmos.date
 INTO TEMP TABLE cmocurrface
 FROM cmos
 INNER JOIN uniqueofincmos
 ON cmos.cmo = uniqueofincmos.cmo
-WHERE date = :currentmonth
+WHERE cmos.date = :currentmonth
+AND collapsed IS NULL;
 
 -- Step 2 :   Weight of each pool i in CMO for the month m 
-
 
 -- = original face of pool i in the CMO * factor of pool i for month m  /  Current face of CMO for month m
 
@@ -57,139 +58,93 @@ WHERE date = :currentmonth
 
 SELECT
     pools.cusip,
-    pools.originalface,
     poolbodies."remainingBalance" / pools.originalface AS factor
 INTO TEMP TABLE currpools 
 FROM pools
 INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
 WHERE poolbodies.date = :currentmonth;
 
-
 -- what we need from plats
 
 SELECT
     platinums.cusip,
-    platinums.originalface,
-    platinumbodies.remainingbalance / platinums.originalface AS factor
+    platinumbodies.remainingbalance / platinums.originalface AS factor,
+    cpr
 INTO TEMP TABLE currplats
 FROM platinums
 INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
 WHERE platinumbodies.date = :currentmonth;
 
-
 -- combining the two to get current face of plats or pools?? for month m 
 
-SELECT *,
-    currpools.originalface * currpools.factor /    
-FROM uniqueofincmos
-INNER JOIN currpools
-ON uniqueofincmos.cusip = currpools.cusip
-
-
-
 
 SELECT
-    ofincmos.cmo,
-    ofincmos.cusip,
-    ofincmos.faceincmo,
-    -- not realy sure how we are using date 
-    ofincmos.date,
-    currpoolscpr.cusip as poolcusip,
-    currpoolscpr."remainingBalance" / currpoolscpr.originalface AS poolfactor,
-    ofincmos.faceincmo * (
-    currpoolscpr."remainingBalance" / currpoolscpr.originalface
-    ) AS ofxfactor,
-    currplatscpr.cusip  as platinplatcusip,
-    currplatscpr.remainingbalance / currplatscpr.originalface AS platfactor,
-    ofincmos.faceincmo * (
-    currplatscpr.remainingbalance / currplatscpr.originalface
-    ) AS ofplatxfactor
-INTO TEMP TABLE ofxfactorcprcmo
-FROM
-    ofincmos
-LEFT JOIN currpoolscpr 
-ON ofincmos.cusip = currpoolscpr.cusip
-LEFT JOIN currplatscpr 
-ON ofincmos.cusip = currplatscpr.cusip
-WHERE
-    (
-    currpoolscpr.cusip IS NOT NULL
-    OR currplatscpr.cusip IS NOT NULL
-    );
-
--- curent face of ech cmo STEP 1
-
-SELECT
-  cmo,
-  SUM(
-    COALESCE(ofxfactor, 0) + COALESCE(ofplatxfactor, 0)
-  ) / 100 AS currface
-INTO TEMP TABLE cmocurrfacecpr
-FROM ofxfactorcprcmo
--- WHERE cmo = '1999-004-1'
-GROUP BY
-  cmo;
-
--- just adding cpr to pools but it is july's do I have plats for june or july??
-
- SELECT
-  currpoolscpr.cusip,
-  currpoolscpr.name,
-  currpoolscpr.indicator,
-  currpoolscpr.originalface,
-  currpoolscpr."remainingBalance",
-  actualcprs.actualcpr
-INTO TEMP TABLE currpoolscprwactual  
-FROM
-  currpoolscpr
--- I guess it needs to be inner join becuase we need a cpr??
--- this is where I had to deal with a null value I believe  
-INNER JOIN actualcprs ON currpoolscpr.cusip = actualcprs.cusip
-WHERE actualcprs.date = :currentmonth;
+    cmo,
+    cmocurrface.cusip,
+    (faceincmo * currpools.factor) / currface AS weightofpool,
+    (faceincmo * currplats.factor) / currface AS weightofplat
+INTO TEMP TABLE weightofpoolsandplats
+FROM cmocurrface
+LEFT JOIN currpools
+ON cmocurrface.cusip = currpools.cusip
+LEFT JOIN currplats
+ON cmocurrface.cusip = currplats.cusip;
 
 
--- cpr to platinums probably could have added them into the first table
+-- weights are adding up to 1
+-- SELECT 
+--     cmo,
+--     SUM(COALESCE(weightofpool, 0) + COALESCE(weightofplat, 0))
+-- INTO TEMP TABLE testingweights    
+-- FROM weightofpoolsandplats
+-- GROUP BY cmo;
+-- -- ORDER BY SUM(COALESCE(weightofpool, 0) + COALESCE(weightofplat, 0)) DESC 
+-- HAVING SUM(COALESCE(weightofpool, 0) + COALESCE(weightofplat, 0)) < 1
+-- LIMIT 5;
 
-SELECT
-  platinums.cusip,
-  platinums.name,
-  platinums.originalface,
-  platinumbodies.remainingbalance,
-  platinumbodies.cpr
-INTO TEMP TABLE currplatswithcpr
-FROM
-  platinums
-  INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
-WHERE
--- is this the right month??
-  date = :pastmonth;
-
-
-
--- Step 2 :   Weight of each pool i in CMO for the month m 
+-- SELECT * 
+-- FROM testingweights
+-- WHERE sum < .99 
+-- ORDER BY sum DESC;
 
 
--- = original face of pool i in the CMO * factor of pool i for month m  /  Current face of CMO for month m
+-- Step 3 :   SMM of CMO for month m+1
 
 
-SELECT
-  ofxfactorcprcmo.cmo,
-  ofxfactorcprcmo.cusip,
-  ofxfactorcprcmo.ofxfactor,
-  ofxfactorcprcmo.ofplatxfactor,
-  ofxfactor/currface AS weightofpool,
-  ofplatxfactor/currface AS weightofplat
-INTO TEMP TABLE weightofpoolorplatincmo
--- so I should be able to make this it's own table limit by born date and be fine
-FROM
-    ofxfactorcprcmo
--- should this be an inner join... they should have the same amount they are the same amount
-INNER JOIN cmocurrfacecpr 
-ON ofxfactorcprcmo.cmo = cmocurrfacecpr.cmo
--- I assume this is ok current face is zero so we no longer care about it
-WHERE cmocurrfacecpr.currface > 0;
+-- = sum weight of each pool i for month m  * SMM of pool i for month m+1
+-- SMM = 1 - Power( 1 - CPR / 100, 1/12 ) 
 
--- LIMIT 2;
+SELECT 
+    cusip,
+    actualcpr
+INTO TEMP TABLE currpoolcprs
+FROM actualcprs
+WHERE date = :currentmonth;
+
+
+SELECT 
+  --  COUNT(*)
+    cmo,
+    weightofpoolsandplats.cusip,
+    COALESCE (weightofpool, weightofplat, 0) AS weightofpool,
+    COALESCE (currpoolcprs.actualcpr, currplats.cpr, 0) AS cpr
+INTO TEMP TABLE weightofpoolsandplatswithcpr
+FROM weightofpoolsandplats
+LEFT JOIN currpoolcprs
+ON weightofpoolsandplats.cusip = currpoolcprs.cusip
+LEFT JOIN currplats
+ON weightofpoolsandplats.cusip = currplats.cusip;
+-- WHERE currplats.cusip is not null
+-- LIMIT 5;
+
+-- SELECT
+--     cmo,
+--     SUM(weightofpool)
+-- FROM weightofpoolsandplatswithcpr
+-- GROUP BY cmo
+-- HAVING SUM(weightofpool) < .99
+-- ORDER BY SUM(weightofpool) DESC
+-- LIMIT 5;
 
 -- SMM = 1 - Power( 1 - CPR / 100, 1/12 ) 
 
@@ -198,60 +153,45 @@ WHERE cmocurrfacecpr.currface > 0;
 
 -- = sum weight of each pool i for month m  * SMM of pool i for month m+1
 
-
-SELECT
-  weightofpoolorplatincmo.cmo,
-  weightofpoolorplatincmo.cusip,
-  currpoolscprwactual.cusip as poolcusip,
-  currpoolscprwactual.actualcpr,
-  weightofpoolorplatincmo.weightofpool,
-  (
+SELECT 
+    cmo,
+    (
     1 -(
       POWER(
-        (1 -(currpoolscprwactual.actualcpr)),
+        (1 -(cpr)),
         (cast(1 as float) / cast(12 as float))
       )
     )
-  ) AS poolsmm,
+  ) AS smm,
   weightofpool * (
     1 -(
       POWER(
-        (1 -(currpoolscprwactual.actualcpr)),
+        (1 -(cpr)),
         (cast(1 as float) / cast(12 as float))
       )
     )
-  ) as weightxpoolssm,
-  currplatswithcpr.cusip as platcusip,
-  weightofpoolorplatincmo.weightofplat,
-  currplatswithcpr.cpr AS platcpr,
-  (
-    1 -(
-      POWER(
-        (1 -(currplatswithcpr.cpr)),
-        (cast(1 as float) / cast(12 as float))
-      )
-    )
-  ) AS platsmm,
-  weightofplat * (
-    1 -(
-      POWER(
-        (1 -(currplatswithcpr.cpr)),
-        (cast(1 as float) / cast(12 as float))
-      )
-    )
-  ) as weightxplatssm
-INTO TEMP TABLE almoststepthreecmos
--- would need to use same table here  
-FROM
-  weightofpoolorplatincmo
-LEFT JOIN currpoolscprwactual
-  ON weightofpoolorplatincmo.cusip = currpoolscprwactual.cusip
-LEFT JOIN currplatswithcpr 
-  ON weightofpoolorplatincmo.cusip = currplatswithcpr.cusip;
--- WHERE currplatswithcpr.cusip IS NOT NULL
+  ) AS weightxsmm
+INTO cmoweightxsmm  
+FROM weightofpoolsandplatswithcpr;
+-- LIMIT 5;  
+
+SELECT 
+    cmo,
+    SUM(weightxsmm)
+INTO TEMP TABLE stepthree
+FROM cmoweightxsmm
+GROUP BY cmo;
+
+-- not sure if sum (ssm) is suppoed to be divided by 100
+-- ones i sent david were 
+SELECT 
+  cmo, 
+  (1 - POWER((1 - (sum)), 12)) AS cpr 
+INTO stepfour  
+FROM stepthree 
+ORDER BY cmo DESC;
 
 
-----------
 
 SELECT
   almoststepthreecmos.cmo,
