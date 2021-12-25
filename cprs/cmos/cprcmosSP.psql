@@ -1,0 +1,207 @@
+
+-- THE FORMULA 
+
+-- SMM = 1 - Power( 1 - CPR / 100, 1/12 ) 
+
+
+-- CPR = 1 - power( 1- SMM, 12 )
+
+
+-- Step 1 :   Current face of each CMO for month m (Just calcilated that so I can probably use it )
+
+
+-- = sum   original face of pool i in the CMO * factor of pool i for month m
+
+
+-- Step 2 :   Weight of each pool i in CMO for the month m 
+
+
+-- = original face of pool i in the CMO * factor of pool i for month m  /  Current face of CMO for month m
+
+
+-- Step 3 :   SMM of CMO for month m+1
+
+
+-- = sum weight of each pool i for month m  * SMM of pool i for month m+1
+
+
+-- Step 4 : CPR of the CMO for month m+1
+
+
+-- Use SMM to CPR formula
+
+
+-- current month is really more the past month ..
+
+create or replace PROCEDURE cmocprs(currentmonth DATE )
+language plpgsql
+as
+$$
+declare
+   futuremonth DATE := currentmonth + interval '1 month' * 1;
+begin
+
+
+  DROP TABLE IF EXISTS cmocurrface, cmoweightxsmm, currplats, currpools,  platscprs,
+                        poolcprs, stepfour, stepthree, weightofpoolsandplats, weightofpoolsandplatswithcpr;
+
+  CREATE TEMP TABLE cmocurrface AS
+  SELECT 
+    uniqueofincmos.cmo,
+    cusip,
+    faceincmo,
+    currface,
+    cmos.date
+  FROM cmos
+  INNER JOIN uniqueofincmos
+  ON cmos.cmo = uniqueofincmos.cmo
+  WHERE cmos.date = currentmonth
+  AND collapsed IS NULL;
+
+  -- Step 2 :   Weight of each pool i in CMO for the month m 
+
+  CREATE TEMP TABLE currpools AS
+  SELECT
+      pools.cusip,
+      poolbodies."remainingBalance" / pools.originalface AS factor
+  FROM pools
+  INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
+  WHERE poolbodies.date = currentmonth;
+
+  -- what we need from plats
+  CREATE TEMP TABLE currplats AS
+  SELECT
+      platinums.cusip,
+      platinumbodies.remainingbalance / platinums.originalface AS factor
+  FROM platinums
+  INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
+  WHERE platinumbodies.date = currentmonth;
+
+  -- combining the two to get current face of plats or pools?? for month m 
+  CREATE TEMP TABLE weightofpoolsandplats AS
+  SELECT
+      cmo,
+      cmocurrface.cusip,
+      (faceincmo * currpools.factor) / currface AS weightofpool,
+      (faceincmo * currplats.factor) / currface AS weightofplat
+  FROM cmocurrface
+  LEFT JOIN currpools
+  ON cmocurrface.cusip = currpools.cusip
+  LEFT JOIN currplats
+  ON cmocurrface.cusip = currplats.cusip;
+
+  CREATE TEMP TABLE poolcprs AS 
+  SELECT 
+      cusip,
+      actualcpr
+  FROM actualcprs
+  WHERE date = futuremonth;
+
+  CREATE TEMP TABLE platscprs AS 
+  SELECT
+      cusip,
+      cpr
+  FROM platinumbodies
+  WHERE platinumbodies.date = futuremonth;
+
+  CREATE TEMP TABLE weightofpoolsandplatswithcpr AS
+  SELECT 
+      cmo,
+      weightofpoolsandplats.cusip,
+      COALESCE (weightofpool, weightofplat, 0) AS weightofpool,
+      COALESCE (poolcprs.actualcpr, platscprs.cpr, 0) AS cpr
+  FROM weightofpoolsandplats
+  LEFT JOIN poolcprs
+  ON weightofpoolsandplats.cusip = poolcprs.cusip
+  LEFT JOIN platscprs
+  ON weightofpoolsandplats.cusip = platscprs.cusip;
+
+  -- SMM = 1 - Power( 1 - CPR / 100, 1/12 ) 
+  -- Step 3 :   SMM of CMO for month m+1
+  -- = sum weight of each pool i for month m  * SMM of pool i for month m+1
+
+  CREATE TEMP TABLE cmoweightxsmm AS
+  SELECT 
+      cmo,
+      (
+      1 -(
+        POWER(
+          (1 -(cpr)),
+          (cast(1 as float) / cast(12 as float))
+        )
+      )
+    ) AS smm,
+    weightofpool * (
+      1 -(
+        POWER(
+          (1 -(cpr)),
+          (cast(1 as float) / cast(12 as float))
+        )
+      )
+    ) AS weightxsmm  
+  FROM weightofpoolsandplatswithcpr;
+
+  CREATE TEMP TABLE stepthree AS
+  SELECT 
+      cmo,
+      SUM(weightxsmm)
+  FROM cmoweightxsmm
+  GROUP BY cmo;
+
+  -- not sure if sum (ssm) is suppoed to be divided by 100
+  -- ones i sent david were 
+
+  CREATE TEMP TABLE stepfour AS
+  SELECT 
+    cmo, 
+    (1 - POWER((1 - (sum)), 12)) AS cpr 
+  FROM stepthree 
+  ORDER BY cmo DESC;
+
+
+  UPDATE cmos
+  SET cpr = stepfour.cpr
+  FROM stepfour
+  WHERE stepfour.cmo = cmos.cmo
+  AND cmos.date = futuremonth;
+
+
+  DROP TABLE IF EXISTS cmocurrface, cmoweightxsmm, currplats, currpools,  platscprs,
+                        poolcprs, stepfour, stepthree, weightofpoolsandplats, weightofpoolsandplatswithcpr;
+
+
+
+end;
+
+$$;
+
+call cmocprs( '2021-10-01' );
+
+
+
+SELECT * 
+FROM cmos 
+WHERE cmo IN ('2021-192-1', '2021-192-2', '2021-191-1', 
+              '2021-191-3', '2021-191-4', '2021-191-4', '2021-191-8')
+AND date = '2021-11-01'
+ORDER BY cmo asc;
+
+
+
+-- shoot out what I have into a csv file
+\COPY (SELECT * FROM cmos) to 'C:\Users\micha\cmos' csv header; 
+
+
+-- read it into cmos database
+
+\COPY cmos FROM 'C:\Users\micha\cmos' DELIMITER ',' CSV HEADER;
+
+
+
+
+
+
+
+
+
+
