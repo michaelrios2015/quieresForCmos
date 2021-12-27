@@ -81,7 +81,7 @@ end;
 
 $$;
 
-call currfacecmo('2021-11-01');
+call currfacecmo('2021-09-01');
 
 -- there are platinums in cmos
 
@@ -113,10 +113,10 @@ CREATE TABLE cmos (
 -- not a clue why it made me cast the date here but not in others??
 -- does not really matter though it seeded the database with the cmos and dates so we are able to proceed
 INSERT INTO cmos (cmo, date)
-SELECT DISTINCT cmo, TO_DATE('20211101','YYYYMMDD')
+SELECT DISTINCT cmo, TO_DATE('20210901','YYYYMMDD')
 FROM uniqueofincmos
 WHERE uniqueofincmos.collapsed is null
-AND uniqueofincmos.date <= '2021-11-01';
+AND uniqueofincmos.date <= '2021-09-01';
 -- INSERT INTO poolfhavas (cusip, fha, va, rural, indian, date)
 -- SELECT cusip, fha, va, rural, indian, '2021-11-01'
 -- FROM tempfhava;

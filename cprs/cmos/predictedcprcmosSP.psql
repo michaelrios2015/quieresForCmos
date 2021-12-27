@@ -33,7 +33,7 @@
 
 -- current month is really more the past month ..
 
-create or replace PROCEDURE cmocprs(currentmonth DATE )
+create or replace PROCEDURE predictedcmocprs(currentmonth DATE )
 language plpgsql
 as
 $$
@@ -90,28 +90,33 @@ begin
   LEFT JOIN currpools
   ON cmocurrface.cusip = currpools.cusip
   LEFT JOIN currplats
-  ON cmocurrface.cusip = currplats.cusip;
+  ON cmocurrface.cusip = currplats.cusip
+  WHERE currface > 0;
 
+  -- gettinging cprs so need to change this
+  --  so this is the prediction for the next month 
   CREATE TEMP TABLE poolcprs AS 
   SELECT 
       cusip,
-      actualcpr
-  FROM actualcprs
+      cpr
+  FROM poolpredictions
   WHERE date = futuremonth;
+
+  -- which platinum bodies the current one because it has next month prediction
 
   CREATE TEMP TABLE platscprs AS 
   SELECT
       cusip,
-      cpr
+      predictedcpr
   FROM platinumbodies
-  WHERE platinumbodies.date = futuremonth;
+  WHERE platinumbodies.date = currentmonth;
 
   CREATE TEMP TABLE weightofpoolsandplatswithcpr AS
   SELECT 
       cmo,
       weightofpoolsandplats.cusip,
       COALESCE (weightofpool, weightofplat, 0) AS weightofpool,
-      COALESCE (poolcprs.actualcpr, platscprs.cpr, 0) AS cpr
+      COALESCE (poolcprs.cpr, platscprs.predictedcpr, 0) AS cpr
   FROM weightofpoolsandplats
   LEFT JOIN poolcprs
   ON weightofpoolsandplats.cusip = poolcprs.cusip
@@ -162,10 +167,10 @@ begin
 
 
   UPDATE cmos
-  SET cpr = stepfour.cpr
+  SET predictedcpr = stepfour.cpr
   FROM stepfour
   WHERE stepfour.cmo = cmos.cmo
-  AND cmos.date = futuremonth;
+  AND cmos.date = currentmonth;
 
 
   DROP TABLE IF EXISTS cmocurrface, cmoweightxsmm, currplats, currpools,  platscprs,
@@ -177,7 +182,7 @@ end;
 
 $$;
 
-call cmocprs( '2021-09-01' );
+call predictedcmocprs( '2021-10-01' );
 
 
 
