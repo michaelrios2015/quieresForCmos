@@ -1,10 +1,12 @@
+--12/27/21 copied from cprcmos should just need to make some minor changes 
+
 
 -- THE FORMULA 
 
--- SMM = 1 - Power( 1 - CPR / 100, 1/12 ) 
+-- SMM = 1 - Power( 1 - CDR / 100, 1/12 ) 
 
 
--- CPR = 1 - power( 1- SMM, 12 )
+-- CDR = 1 - power( 1- SMM, 12 )
 
 
 -- Step 1 :   Current face of each CMO for month m (Just calcilated that so I can probably use it )
@@ -25,15 +27,15 @@
 -- = sum weight of each pool i for month m  * SMM of pool i for month m+1
 
 
--- Step 4 : CPR of the CMO for month m+1
+-- Step 4 : CDR of the CMO for month m+1
 
 
--- Use SMM to CPR formula
+-- Use SMM to CDR formula
 
 
 -- current month is really more the past month ..
 
-create or replace PROCEDURE cmocprs(pastmonth DATE )
+create or replace PROCEDURE cmocdrs(pastmonth DATE )
 language plpgsql
 as
 $$
@@ -42,8 +44,8 @@ declare
 begin
 
 
-  DROP TABLE IF EXISTS cmocurrface, cmoweightxsmm, currplats, currpools,  platscprs,
-                        poolcprs, stepfour, stepthree, weightofpoolsandplats, weightofpoolsandplatswithcpr;
+  DROP TABLE IF EXISTS cmocurrface, cmoweightxsmm, currplats, currpools,  platscdrs,
+                        poolcdrs, stepfour, stepthree, weightofpoolsandplats, weightofpoolsandplatswithcdr;
 
   -- Step 1 :   Current face of each CMO for month m (Just calculated that so I can probably use it )
 
@@ -93,33 +95,34 @@ begin
   LEFT JOIN currplats
   ON cmocurrface.cusip = currplats.cusip;
 
-  CREATE TEMP TABLE poolcprs AS 
+  CREATE TEMP TABLE poolcdrs AS 
   SELECT 
       cusip,
-      actualcpr
-  FROM actualcprs
+      cdr
+  FROM actualcdrs
   WHERE date = currentmonth;
 
-  CREATE TEMP TABLE platscprs AS 
+  CREATE TEMP TABLE platscdrs AS 
   SELECT
       cusip,
-      cpr
+      cdr
   FROM platinumbodies
   WHERE platinumbodies.date = currentmonth;
 
-  CREATE TEMP TABLE weightofpoolsandplatswithcpr AS
+  -- puting the two columns into one
+  CREATE TEMP TABLE weightofpoolsandplatswithcdr AS
   SELECT 
       cmo,
       weightofpoolsandplats.cusip,
       COALESCE (weightofpool, weightofplat, 0) AS weightofpool,
-      COALESCE (poolcprs.actualcpr, platscprs.cpr, 0) AS cpr
+      COALESCE (poolcdrs.cdr, platscdrs.cdr, 0) AS cdr
   FROM weightofpoolsandplats
-  LEFT JOIN poolcprs
-  ON weightofpoolsandplats.cusip = poolcprs.cusip
-  LEFT JOIN platscprs
-  ON weightofpoolsandplats.cusip = platscprs.cusip;
+  LEFT JOIN poolcdrs
+  ON weightofpoolsandplats.cusip = poolcdrs.cusip
+  LEFT JOIN platscdrs
+  ON weightofpoolsandplats.cusip = platscdrs.cusip;
 
-  -- SMM = 1 - Power( 1 - CPR / 100, 1/12 ) 
+  -- SMM = 1 - Power( 1 - cdr / 100, 1/12 ) 
   -- Step 3 :   SMM of CMO for month m+1
   -- = sum weight of each pool i for month m  * SMM of pool i for month m+1
 
@@ -129,7 +132,7 @@ begin
       (
       1 -(
         POWER(
-          (1 -(cpr)),
+          (1 -(cdr)),
           (cast(1 as float) / cast(12 as float))
         )
       )
@@ -137,12 +140,12 @@ begin
     weightofpool * (
       1 -(
         POWER(
-          (1 -(cpr)),
+          (1 -(cdr)),
           (cast(1 as float) / cast(12 as float))
         )
       )
     ) AS weightxsmm  
-  FROM weightofpoolsandplatswithcpr;
+  FROM weightofpoolsandplatswithcdr;
 
   CREATE TEMP TABLE stepthree AS
   SELECT 
@@ -157,20 +160,20 @@ begin
   CREATE TEMP TABLE stepfour AS
   SELECT 
     cmo, 
-    (1 - POWER((1 - (sum)), 12)) AS cpr 
+    (1 - POWER((1 - (sum)), 12)) AS cdr 
   FROM stepthree 
   ORDER BY cmo DESC;
 
 
   UPDATE cmos
-  SET cpr = stepfour.cpr
+  SET cdr = stepfour.cdr
   FROM stepfour
   WHERE stepfour.cmo = cmos.cmo
   AND cmos.date = currentmonth;
 
 
-  DROP TABLE IF EXISTS cmocurrface, cmoweightxsmm, currplats, currpools,  platscprs,
-                        poolcprs, stepfour, stepthree, weightofpoolsandplats, weightofpoolsandplatswithcpr;
+  DROP TABLE IF EXISTS cmocurrface, cmoweightxsmm, currplats, currpools,  platscdrs,
+                        poolcdrs, stepfour, stepthree, weightofpoolsandplats, weightofpoolsandplatswithcdr;
 
 
 
@@ -178,7 +181,7 @@ end;
 
 $$;
 
-call cmocprs( '2021-09-01' );
+call cmocdrs( '2021-10-01' );
 
 
 

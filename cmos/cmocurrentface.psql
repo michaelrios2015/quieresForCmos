@@ -81,7 +81,7 @@ end;
 
 $$;
 
-call currfacecmo('2021-09-01');
+call currfacecmo('2021-08-01');
 
 -- there are platinums in cmos
 
@@ -97,10 +97,8 @@ CREATE TABLE cmos (
    cpr double precision,
    predictedcpr double precision,
    predictedcprnext double precision,
-   predictedvpr double precision,
-   predictedvprnext double precision,
+   cdr double precision,
    predictedcdr double precision,
-   predictedcdrnext double precision,
    date date NOT NULL,
    PRIMARY KEY (cmo, date)
 );
@@ -113,10 +111,10 @@ CREATE TABLE cmos (
 -- not a clue why it made me cast the date here but not in others??
 -- does not really matter though it seeded the database with the cmos and dates so we are able to proceed
 INSERT INTO cmos (cmo, date)
-SELECT DISTINCT cmo, TO_DATE('20210901','YYYYMMDD')
+SELECT DISTINCT cmo, TO_DATE('20210801','YYYYMMDD')
 FROM uniqueofincmos
 WHERE uniqueofincmos.collapsed is null
-AND uniqueofincmos.date <= '2021-09-01';
+AND uniqueofincmos.date <= '2021-08-01';
 -- INSERT INTO poolfhavas (cusip, fha, va, rural, indian, date)
 -- SELECT cusip, fha, va, rural, indian, '2021-11-01'
 -- FROM tempfhava;
@@ -125,3 +123,29 @@ AND uniqueofincmos.date <= '2021-09-01';
 -- if i need to reset the currface
 UPDATE cmos
 SET currface = null;
+
+
+-- query for web page
+
+
+    SELECT 
+        cmos.cmo,
+        cmos.currface,
+        cmos.cpr,
+        cmos.cpr - X.predictedcpr AS resid,
+        cmos.predictedcpr,
+        cmos.predictedcprnext
+    FROM cmos
+    LEFT JOIN (
+        SELECT 
+            cmo,
+            predictedcpr
+            FROM cmos
+            -- INTO TEMP TABLE predictedcpr
+            WHERE date = '2021-10-01'
+      ) AS X
+      ON cmos.cmo = X.cmo
+      WHERE date = '2021-11-01'
+      and cmos.cmo LIKE '2021%'
+    --   and X.cmo is not NULL
+      LIMIT 5;

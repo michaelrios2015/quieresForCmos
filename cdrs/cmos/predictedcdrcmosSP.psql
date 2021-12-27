@@ -1,10 +1,12 @@
+-- changeing from cpr to cdr 12/27/21
+
 
 -- THE FORMULA 
 
--- SMM = 1 - Power( 1 - CPR / 100, 1/12 ) 
+-- SMM = 1 - Power( 1 - CDR / 100, 1/12 ) 
 
 
--- CPR = 1 - power( 1- SMM, 12 )
+-- CDR = 1 - power( 1- SMM, 12 )
 
 
 -- Step 1 :   Current face of each CMO for month m (Just calcilated that so I can probably use it )
@@ -25,25 +27,25 @@
 -- = sum weight of each pool i for month m  * SMM of pool i for month m+1
 
 
--- Step 4 : CPR of the CMO for month m+1
+-- Step 4 : CDR of the CMO for month m+1
 
 
--- Use SMM to CPR formula
+-- Use SMM to CDR formula
 
 
 -- current month is really more the past month ..
 
-create or replace PROCEDURE cmocprs(pastmonth DATE )
+create or replace PROCEDURE predictedcmocdrs(currentmonth DATE )
 language plpgsql
 as
 $$
 declare
-   currentmonth DATE := pastmonth + interval '1 month' * 1;
+   futuremonth DATE := currentmonth + interval '1 month' * 1;
 begin
 
 
-  DROP TABLE IF EXISTS cmocurrface, cmoweightxsmm, currplats, currpools,  platscprs,
-                        poolcprs, stepfour, stepthree, weightofpoolsandplats, weightofpoolsandplatswithcpr;
+  DROP TABLE IF EXISTS cmocurrface, cmoweightxsmm, currplats, currpools,  platscdrs,
+                        poolcdrs, stepfour, stepthree, weightofpoolsandplats, weightofpoolsandplatswithcdr;
 
   -- Step 1 :   Current face of each CMO for month m (Just calculated that so I can probably use it )
 
@@ -57,7 +59,7 @@ begin
   FROM cmos
   INNER JOIN uniqueofincmos
   ON cmos.cmo = uniqueofincmos.cmo
-  WHERE cmos.date = pastmonth
+  WHERE cmos.date = currentmonth
   AND collapsed IS NULL
   AND currface > 0;
 
@@ -69,7 +71,7 @@ begin
       poolbodies."remainingBalance" / pools.originalface AS factor
   FROM pools
   INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
-  WHERE poolbodies.date = pastmonth;
+  WHERE poolbodies.date = currentmonth;
 
   -- what we need from plats
   CREATE TEMP TABLE currplats AS
@@ -78,7 +80,7 @@ begin
       platinumbodies.remainingbalance / platinums.originalface AS factor
   FROM platinums
   INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
-  WHERE platinumbodies.date = pastmonth;
+  WHERE platinumbodies.date = currentmonth;
 
   -- combining the two to get current face of plats or pools?? for month m 
   CREATE TEMP TABLE weightofpoolsandplats AS
@@ -93,33 +95,37 @@ begin
   LEFT JOIN currplats
   ON cmocurrface.cusip = currplats.cusip;
 
-  CREATE TEMP TABLE poolcprs AS 
+  -- gettinging cdrs so need to change this
+  --  so this is the prediction for the next month 
+  CREATE TEMP TABLE poolcdrs AS 
   SELECT 
       cusip,
-      actualcpr
-  FROM actualcprs
-  WHERE date = currentmonth;
+      cdr
+  FROM poolpredictions
+  WHERE date = futuremonth;
 
-  CREATE TEMP TABLE platscprs AS 
+  -- which platinum bodies the current one because it has next month prediction
+
+  CREATE TEMP TABLE platscdrs AS 
   SELECT
       cusip,
-      cpr
+      predictedcdr
   FROM platinumbodies
   WHERE platinumbodies.date = currentmonth;
 
-  CREATE TEMP TABLE weightofpoolsandplatswithcpr AS
+  CREATE TEMP TABLE weightofpoolsandplatswithcdr AS
   SELECT 
       cmo,
       weightofpoolsandplats.cusip,
       COALESCE (weightofpool, weightofplat, 0) AS weightofpool,
-      COALESCE (poolcprs.actualcpr, platscprs.cpr, 0) AS cpr
+      COALESCE (poolcdrs.cdr, platscdrs.predictedcdr, 0) AS cdr
   FROM weightofpoolsandplats
-  LEFT JOIN poolcprs
-  ON weightofpoolsandplats.cusip = poolcprs.cusip
-  LEFT JOIN platscprs
-  ON weightofpoolsandplats.cusip = platscprs.cusip;
+  LEFT JOIN poolcdrs
+  ON weightofpoolsandplats.cusip = poolcdrs.cusip
+  LEFT JOIN platscdrs
+  ON weightofpoolsandplats.cusip = platscdrs.cusip;
 
-  -- SMM = 1 - Power( 1 - CPR / 100, 1/12 ) 
+  -- SMM = 1 - Power( 1 - cdr / 100, 1/12 ) 
   -- Step 3 :   SMM of CMO for month m+1
   -- = sum weight of each pool i for month m  * SMM of pool i for month m+1
 
@@ -129,7 +135,7 @@ begin
       (
       1 -(
         POWER(
-          (1 -(cpr)),
+          (1 -(cdr)),
           (cast(1 as float) / cast(12 as float))
         )
       )
@@ -137,12 +143,12 @@ begin
     weightofpool * (
       1 -(
         POWER(
-          (1 -(cpr)),
+          (1 -(cdr)),
           (cast(1 as float) / cast(12 as float))
         )
       )
     ) AS weightxsmm  
-  FROM weightofpoolsandplatswithcpr;
+  FROM weightofpoolsandplatswithcdr;
 
   CREATE TEMP TABLE stepthree AS
   SELECT 
@@ -157,20 +163,20 @@ begin
   CREATE TEMP TABLE stepfour AS
   SELECT 
     cmo, 
-    (1 - POWER((1 - (sum)), 12)) AS cpr 
+    (1 - POWER((1 - (sum)), 12)) AS cdr 
   FROM stepthree 
   ORDER BY cmo DESC;
 
 
   UPDATE cmos
-  SET cpr = stepfour.cpr
+  SET predictedcdr = stepfour.cdr
   FROM stepfour
   WHERE stepfour.cmo = cmos.cmo
   AND cmos.date = currentmonth;
 
 
-  DROP TABLE IF EXISTS cmocurrface, cmoweightxsmm, currplats, currpools,  platscprs,
-                        poolcprs, stepfour, stepthree, weightofpoolsandplats, weightofpoolsandplatswithcpr;
+  DROP TABLE IF EXISTS cmocurrface, cmoweightxsmm, currplats, currpools,  platscdrs,
+                        poolcdrs, stepfour, stepthree, weightofpoolsandplats, weightofpoolsandplatswithcdr;
 
 
 
@@ -178,7 +184,7 @@ end;
 
 $$;
 
-call cmocprs( '2021-09-01' );
+call predictedcmocdrs( '2021-10-01' );
 
 
 
@@ -198,13 +204,5 @@ ORDER BY cmo asc;
 -- read it into cmos database
 
 \COPY cmos FROM 'C:\Users\micha\cmos' DELIMITER ',' CSV HEADER;
-
-
-
-
-
-
-
-
 
 
