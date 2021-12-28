@@ -195,62 +195,6 @@ ORDER BY cmo asc;
 
 
 
--- shoot out what I have into a csv file
-\COPY (SELECT * FROM cmos) to 'C:\Users\micha\cmos' csv header; 
-
-
--- read it into cmos database
-
-\COPY cmos FROM 'C:\Users\micha\cmos' DELIMITER ',' CSV HEADER;
-
-
-
--- should probably find a better place to put this going to spit out the cmo data we want and put
--- that into deployed database
-
-\set currentmonth 'date ''2021-11-01'''
-\set pastmonth 'date ''2021-10-01'''
-
--- getting the predicted cpr from the past month for the residual
-
-DROP TABLE IF EXISTS predictedcpr;
-
-SELECT 
-  cmo,
-  predictedcpr
-INTO TEMP TABLE predictedcpr
-FROM cmos
-WHERE date = :pastmonth;
-    
-SELECT 
-  cmos.cmo,
-  cmos.currface
-  -- cmos.cpr,
-  -- cmos.cpr - predictedcpr.predictedcpr AS resid,
-  -- cmos.predictedcpr,
-  -- cmos.predictedcprnext
-FROM cmos
-LEFT JOIN predictedcpr
-ON cmos.cmo = predictedcpr.cmo
-WHERE date = :currentmonth
-and cmos.cmo LIKE '%-%T3'
-LIMIT 1000;
-
-
-
-SELECT 
-  -- COUNT(*)
-  cmos.cmo,
-  cmos.currface
-FROM cmos
-WHERE currface < 10000
-AND date = '2021-11-01'
-and cmos.cmo NOT LIKE '%-%T%';
-
-
-date = :currentmonth
-and cmos.cmo LIKE '%-%T3'
-LIMIT 1000;
 
 
 

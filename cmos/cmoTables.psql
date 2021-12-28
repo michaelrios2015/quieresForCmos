@@ -1,0 +1,38 @@
+-- so we are using this as the new cmo table the old one seemed wacky this may have to change as well
+-- but should be enough to get us started 
+
+-- table for cmos_builder
+
+CREATE TABLE cmos (
+   cmo varchar NOT NULL,
+   currface double precision,
+   cpr double precision,
+   predictedcpr double precision,
+   predictedcprnext double precision,
+   cdr double precision,
+   predictedcdr double precision,
+   date date NOT NULL,
+   PRIMARY KEY (cmo, date)
+);
+
+
+-- table for cmos
+
+-- cmo,currface,cpr,resid,pastresid,twomonthspastresid,predictedcpr,predictedcprnext,cdr,predictedcdr
+
+CREATE TABLE cmos (
+   cmo varchar NOT NULL,
+   currface double precision,
+   cpr double precision,
+   pastcpr double precision,
+   twomonthspastcpr double precision, 
+   resid double precision,
+   pastresid double precision,
+   twomonthspastresid double precision,
+   predictedcpr double precision,
+   predictedcprnext double precision,
+   cdr double precision,
+   predictedcdr double precision,
+   date date NOT NULL,
+   PRIMARY KEY (cmo, date)
+);

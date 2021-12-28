@@ -88,20 +88,7 @@ call currfacecmo('2021-08-01');
 SELECT count(*) from uniqueofincmos INNER JOIN platinums ON uniqueofincmos.cusip = platinums.cusip limit 2; 
 
 
--- so we are using this as the new cmo table the old one seemed wacky this may have to change as well
--- but should be enough to get us started 
 
-CREATE TABLE cmos (
-   cmo varchar NOT NULL,
-   currface double precision,
-   cpr double precision,
-   predictedcpr double precision,
-   predictedcprnext double precision,
-   cdr double precision,
-   predictedcdr double precision,
-   date date NOT NULL,
-   PRIMARY KEY (cmo, date)
-);
 
 -- so I ahve a cmo table and I need to load it with the cmos and a date 
 

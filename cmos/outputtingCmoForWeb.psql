@@ -1,0 +1,119 @@
+
+-- shoot out what I have into a csv file
+\COPY (SELECT * FROM cmos) to 'C:\Users\micha\cmos' csv header; 
+
+
+-- read it into cmos database
+
+\COPY cmos FROM 'C:\Users\Public\cmodataforweb' DELIMITER ',' CSV HEADER;
+
+
+
+-- should probably find a better place to put this going to spit out the cmo data we want and put
+-- that into deployed database
+
+
+
+
+\set currentmonth 'date ''2021-11-01'''
+\set pastmonth 'date ''2021-10-01'''
+\set twomonthspast 'date ''2021-09-01'''
+\set threemonthspast 'date ''2021-08-01'''
+
+-- getting the predicted cpr from the past month for the residual
+
+create or replace PROCEDURE outputcmos( currentmonth DATE )
+language plpgsql
+as
+$$
+declare
+    pastmonth DATE := currentmonth - interval '1 month' * 1;
+    twomonthspast DATE := currentmonth - interval '1 month' * 2;
+    threemonthspast DATE := currentmonth - interval '1 month' * 3;
+begin
+
+
+    DROP TABLE IF EXISTS pastmonthinfo, twomonthspastinfo, threemonthspastinfo, cmodataforweb;
+
+    CREATE TEMP TABLE pastmonthinfo AS
+    SELECT 
+        cmo,
+        cpr,
+        predictedcpr
+    FROM cmos
+    WHERE date = pastmonth;
+
+    CREATE TEMP TABLE twomonthspastinfo AS
+    SELECT 
+        cmo,
+        cpr,
+        predictedcpr
+    FROM cmos
+    WHERE date = twomonthspast;
+
+    CREATE TEMP TABLE threemonthspastinfo AS
+    SELECT 
+        cmo,
+        predictedcpr
+    FROM cmos
+    WHERE date = threemonthspast;
+
+    CREATE TEMP TABLE cmodataforweb AS
+    SELECT 
+        cmos.cmo,
+        cmos.currface,
+        cmos.cpr,
+        pastmonthinfo.cpr AS pastmonthcpr,
+        twomonthspastinfo.cpr AS twomonthspastcpr,
+        cmos.cpr - pastmonthinfo.predictedcpr AS resid,
+        pastmonthinfo.cpr - twomonthspastinfo.predictedcpr AS pastresid,
+        twomonthspastinfo.cpr - threemonthspastinfo.predictedcpr AS twomonthspastresid,
+        cmos.predictedcpr,
+        cmos.predictedcprnext,
+        cmos.cdr,
+        cmos.predictedcdr,
+        cmos.date  
+    FROM cmos
+    LEFT JOIN pastmonthinfo
+    ON cmos.cmo = pastmonthinfo.cmo
+    LEFT JOIN twomonthspastinfo
+    ON cmos.cmo = twomonthspastinfo.cmo
+    LEFT JOIN threemonthspastinfo
+    ON cmos.cmo = threemonthspastinfo.cmo
+    WHERE date = currentmonth
+    and cmos.cmo NOT LIKE '%-T%';
+
+    EXECUTE 'COPY (SELECT * FROM cmodataforweb) to ''C:\Users\Public\cmodataforweb'' csv header';
+
+
+    DROP TABLE IF EXISTS pastmonthinfo, twomonthspastinfo, threemonthspastinfo, cmodataforweb;
+
+
+end;
+
+$$;
+
+call outputcmos( '2021-11-01' );
+
+
+\COPY cmos FROM 'C:\Users\Public\cmodataforweb' DELIMITER ',' CSV HEADER;
+
+
+-- AND threemonthspastinfo.predictedcpr IS NOT NULL
+-- LIMIT 10;
+
+
+
+SELECT 
+  -- COUNT(*)
+  cmos.cmo,
+  cmos.currface
+FROM cmos
+WHERE currface < 10000
+AND date = '2021-11-01'
+and cmos.cmo NOT LIKE '%-%T%';
+
+
+date = :currentmonth
+and cmos.cmo LIKE '%-%T3'
+LIMIT 1000;
