@@ -1,0 +1,118 @@
+-- For each cmo group we would like to list some information about it.  For example weighted avg coupon
+
+-- Coupon of each pool * weight of each pool
+
+-- Step 1 :   Current face of each CMO for month m (Just calcilated that so I can probably use it )
+
+
+-- = sum   original face of pool i in the CMO * factor of pool i for month m
+
+
+-- Step 2 :   Weight of each pool i in CMO for the month m 
+
+
+-- = original face of pool i in the CMO * factor of pool i for month m  /  Current face of CMO for month m
+
+-- Step 3:
+
+--     SUM by cmo (Coupon of each pool * weight of each pool)
+
+
+create or replace PROCEDURE cmoscoupon ( currentmonth DATE )
+language plpgsql
+as
+$$
+declare
+begin 
+
+
+    DROP TABLE IF EXISTS cmocurrface, currplats, currpools, 
+                    weightofpoolsandplats, weightxcoupon, cmocoupons;
+
+    -- Step 1 :   Current face of each CMO for month m (Just calculated that so I can probably use it )
+
+    CREATE TEMP TABLE cmocurrface AS
+    SELECT 
+        uniqueofincmos.cmo,
+        cusip,
+        faceincmo,
+        currface,
+        cmos.date
+    FROM cmos
+    INNER JOIN uniqueofincmos
+    ON cmos.cmo = uniqueofincmos.cmo
+    WHERE cmos.date = currentmonth
+    AND collapsed IS NULL
+    AND currface > 0;
+
+    -- Step 2 :   Weight of each pool i in CMO for the month m 
+
+    CREATE TEMP TABLE currpools AS
+    SELECT
+        pools.cusip,
+        poolbodies."interestRate" AS coupon,
+        poolbodies."remainingBalance" / pools.originalface AS factor
+    FROM pools
+    INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
+    WHERE poolbodies.date = currentmonth;
+
+    -- what we need from plats
+    CREATE TEMP TABLE currplats AS
+    SELECT
+        platinums.cusip,
+        platinumbodies.interestrate AS coupon,
+        platinumbodies.remainingbalance / platinums.originalface AS factor
+    FROM platinums
+    INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
+    WHERE platinumbodies.date = currentmonth;
+
+    -- combining the two to get current face of plats or pools?? for month m 
+    CREATE TEMP TABLE weightofpoolsandplats AS
+    SELECT
+        cmo,
+        cmocurrface.cusip,
+        (faceincmo * currpools.factor) / currface AS weightofpool,
+        currpools.coupon AS poolcoupon,
+        (faceincmo * currplats.factor) / currface AS weightofplat,
+        currplats.coupon AS platcoupon
+    FROM cmocurrface
+    LEFT JOIN currpools
+    ON cmocurrface.cusip = currpools.cusip
+    LEFT JOIN currplats
+    ON cmocurrface.cusip = currplats.cusip;
+
+    -- Step 3:
+
+    --     SUM by cmo (Coupon of each pool * weight of each pool)
+
+    -- just multiplying wight times coupon
+    CREATE TEMP TABLE weightxcoupon AS
+    SELECT 
+        cmo,
+        weightofpool * poolcoupon AS weightxcouponpool,
+        weightofplat * platcoupon AS weightxcouponplat
+    FROM weightofpoolsandplats;
+
+    -- Summing weight times coupon
+    CREATE TEMP TABLE cmocoupons AS
+    SELECT 
+        cmo,
+        SUM (COALESCE(weightxcouponpool, weightxcouponplat, 0)) AS coupon
+    FROM weightxcoupon
+    GROUP BY cmo;
+
+    UPDATE cmos
+    SET coupon = cmocoupons.coupon
+    FROM cmocoupons
+    WHERE cmocoupons.cmo = cmos.cmo
+    AND cmos.date = currentmonth;
+
+    DROP TABLE IF EXISTS cmocurrface, currplats, currpools, 
+                        weightofpoolsandplats, weightxcoupon, cmocoupons;
+
+
+end;
+
+$$;
+
+call cmoscoupon( '2021-11-01' );

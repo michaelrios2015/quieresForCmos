@@ -1,0 +1,36 @@
+
+
+
+create or replace PROCEDURE allcmostoredprocedure( currentmonth DATE )
+language plpgsql
+as
+$$
+declare
+    pastmonth DATE := currentmonth - interval '1 month' * 1;
+begin
+
+    -- current face needs to be calculated first 
+    call currfacecmo( currentmonth );
+
+    -- don't think this order matters but it is how I think of them 
+    call cmoscoupon ( currentmonth );
+
+    call cmocprs( pastmonth );
+
+    call predictedcmocprs( currentmonth );
+
+    call predictedcmocprsnext( currentmonth );
+
+    call cmocdrs( pastmonth );
+
+    call predictedcmocdrs(currentmonth );
+
+    call outputcmos( currentmonth );
+
+
+end; 
+
+$$;
+
+
+call allcmostoredprocedure( '2021-11-01' );

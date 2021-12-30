@@ -62,6 +62,7 @@ begin
     SELECT 
         cmos.cmo,
         cmos.currface,
+        round(CAST(cmos.coupon AS NUMERIC), 1) AS coupon,
         cmos.cpr,
         pastmonthinfo.cpr AS pastmonthcpr,
         twomonthspastinfo.cpr AS twomonthspastcpr,
@@ -81,7 +82,8 @@ begin
     LEFT JOIN threemonthspastinfo
     ON cmos.cmo = threemonthspastinfo.cmo
     WHERE date = currentmonth
-    and cmos.cmo NOT LIKE '%-T%';
+    and cmos.cmo NOT LIKE '%-T%'
+    AND currface > 0;
 
     EXECUTE 'COPY (SELECT * FROM cmodataforweb) to ''C:\Users\Public\cmodataforweb'' csv header';
 

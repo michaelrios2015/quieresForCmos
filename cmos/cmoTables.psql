@@ -23,6 +23,7 @@ CREATE TABLE cmos (
 CREATE TABLE cmos (
    cmo varchar NOT NULL,
    currface double precision,
+   coupon double precision,
    cpr double precision,
    pastcpr double precision,
    twomonthspastcpr double precision, 
@@ -36,3 +37,6 @@ CREATE TABLE cmos (
    date date NOT NULL,
    PRIMARY KEY (cmo, date)
 );
+
+ALTER TABLE cmos
+ADD COLUMN coupon double precision;
