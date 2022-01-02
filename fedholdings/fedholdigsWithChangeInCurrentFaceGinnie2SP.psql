@@ -1,0 +1,227 @@
+-- should be converted into a stored procedure to make my life easier 11/28/21
+
+-- so the feddata is not usiing the right factor so I am 
+-- going to get spetember factor 
+
+-- OK i Think this worked  should probably add some comments... looks like we are using a small portion of the cusips in fedholdings 
+
+-- so I need the pools and platinums current factor to be correct to use this
+
+create or replace PROCEDURE fedholdingscurrface(currentmonth DATE, feddate DATE)
+language plpgsql
+as
+$$
+declare
+   pastmonth DATE := currentmonth - interval '1 month' * 1;
+begin
+
+    DROP TABLE IF EXISTS 
+        poolsfactorpreviosmonth, 
+        poolsfactorcurrentmonth, 
+        platinumsfactorpreviosmonth,
+        platinumsfactorpreviosmonth,
+        fedholdingscurr,
+        poolsadjustedcurrface,
+        platsadjustedcurrface;
+
+  
+    -- pools previous factor
+    CREATE TEMP TABLE poolsfactorpreviosmonth AS
+    SELECT   
+        pools.cusip,
+        pools.originalface,
+        poolbodies."remainingBalance",
+        -- calculating the factor on our own
+        poolbodies."remainingBalance" / pools.originalface AS factor, 
+        poolbodies.date
+    FROM pools 
+    INNER JOIN poolbodies
+    ON pools.cusip = poolbodies.cusip 
+    WHERE poolbodies.date = pastmonth;
+    -- LIMIT 10;
+
+    -- pools current factor
+    CREATE TEMP TABLE poolsfactorcurrentmonth AS
+    SELECT   
+        pools.cusip,
+        pools.originalface,
+        poolbodies."remainingBalance",
+        -- calculating the factor on our own
+        poolbodies."remainingBalance" / pools.originalface AS factor, 
+        poolbodies.date
+    FROM pools 
+    INNER JOIN poolbodies
+    ON pools.cusip = poolbodies.cusip 
+    WHERE poolbodies.date = currentmonth;
+
+    -- platinums previous factor
+    CREATE TEMP TABLE platinumsfactorpreviosmonth AS
+    SELECT   
+        platinums.cusip,
+        platinums.originalface,
+        platinumbodies.remainingbalance,
+        -- calculating the factor on our own
+        platinumbodies.remainingbalance / platinums.originalface AS factor, 
+        platinumbodies.date
+    FROM platinums 
+    INNER JOIN platinumbodies
+    ON platinums.cusip = platinumbodies.cusip 
+    WHERE platinumbodies.date = pastmonth;
+    -- LIMIT 10;
+
+    -- platinums current factor
+    CREATE TEMP TABLE platinumsfactorcurrentmonth AS
+    SELECT   
+        platinums.cusip,
+        platinums.originalface,
+        platinumbodies.remainingbalance,
+        -- calculating the factor on our own
+        platinumbodies.remainingbalance / platinums.originalface AS factor, 
+        platinumbodies.date
+    FROM platinums 
+    INNER JOIN platinumbodies
+    ON platinums.cusip = platinumbodies.cusip 
+    WHERE platinumbodies.date = currentmonth;
+
+    -- the fed holdings to be modified
+    CREATE TEMP TABLE fedholdingscurr AS
+    SELECT * 
+    FROM fedholdings
+    WHERE asofdate = feddate;
+
+    -- calculate new current face for pools
+    CREATE TEMP TABLE poolsadjustedcurrface AS
+    SELECT 
+        fedholdingscurr.asofdate,
+        fedholdingscurr.cusip,
+        fedholdingscurr.currentfacevalue,
+        fedholdingscurr.isaggregated,
+        currentfacevalue/poolsfactorpreviosmonth.factor AS originalface,
+        (currentfacevalue/poolsfactorpreviosmonth.factor) * poolsfactorcurrentmonth.factor AS currentface
+    FROM fedholdingscurr
+    INNER JOIN poolsfactorpreviosmonth
+    ON fedholdingscurr.cusip = poolsfactorpreviosmonth.cusip
+    INNER JOIN poolsfactorcurrentmonth
+    ON fedholdingscurr.cusip = poolsfactorcurrentmonth.cusip;
+    -- LIMIT 2;
+
+    -- calculate new current face for plats
+    CREATE TEMP TABLE platsadjustedcurrface AS
+    SELECT 
+        fedholdingscurr.asofdate,
+        fedholdingscurr.cusip,
+        fedholdingscurr.currentfacevalue,
+        fedholdingscurr.isaggregated,
+        currentfacevalue/platinumsfactorpreviosmonth.factor AS originalface,
+        (currentfacevalue/platinumsfactorpreviosmonth.factor) * platinumsfactorcurrentmonth.factor AS currentface
+    FROM fedholdingscurr
+    INNER JOIN platinumsfactorpreviosmonth
+    ON fedholdingscurr.cusip = platinumsfactorpreviosmonth.cusip
+    INNER JOIN platinumsfactorcurrentmonth
+    ON fedholdingscurr.cusip = platinumsfactorcurrentmonth.cusip;
+    -- LIMIT 2;
+
+    -- update the pools in fed
+
+    UPDATE fedholdings
+    SET currentfacevalue = platsadjustedcurrface.currentface
+    FROM platsadjustedcurrface
+    WHERE fedholdings.cusip = platsadjustedcurrface.cusip
+    AND fedholdings.asofdate = feddate;
+
+    -- update the plats in fed
+
+    UPDATE fedholdings
+    SET currentfacevalue = poolsadjustedcurrface.currentface
+    FROM poolsadjustedcurrface
+    WHERE fedholdings.cusip = poolsadjustedcurrface.cusip
+    AND fedholdings.asofdate = feddate;
+
+    DROP TABLE IF EXISTS 
+        poolsfactorpreviosmonth, 
+        poolsfactorcurrentmonth, 
+        platinumsfactorpreviosmonth,
+        platinumsfactorpreviosmonth,
+        fedholdingscurr,
+        poolsadjustedcurrface,
+        platsadjustedcurrface;
+
+
+end;
+
+$$;
+
+
+
+
+call fedholdingscurrface('2021-11-01', '2021-12-15');
+
+
+
+
+
+
+---------------------------------------------------------
+-- this was older stuff from that I don't think I used 11/14/21
+
+
+------ so just trying to convert currect face to original
+
+--- just getting the factor
+
+SELECT  
+    pools.cusip, 
+    pools."originalface", 
+    poolbodies."remainingBalance", 
+    poolbodies.factor, 
+    poolbodies."remainingBalance"/pools."originalface" as factortwo,
+    date
+INTO TEMP TABLE poolsfactor
+FROM pools 
+INNER JOIN poolbodies
+ON pools.cusip = poolbodies.cusip
+WHERE date = '2021-05-01';
+
+SELECT  
+    pools.cusip, 
+    pools."originalface", 
+    poolbodies."remainingBalance", 
+    poolbodies.factor, 
+    poolbodies."remainingBalance"/pools."originalface" as factortwo,
+    date
+INTO TEMP TABLE poolsfactorjune
+FROM pools 
+INNER JOIN poolbodies
+ON pools.cusip = poolbodies.cusip
+WHERE date = '2021-06-01';
+
+
+LIMIT 5;
+
+-- so pretty sure fed as of date first two are two months back and last two are one month back 
+
+SELECT 
+    asofdate, 
+    fedholdings.cusip,
+    currentfacevalue,
+    factortwo,
+    currentfacevalue / factortwo as of,
+    date
+FROM fedholdings
+INNER JOIN poolsfactor
+ON fedholdings.cusip = poolsfactor.cusip
+WHERE asofdate = '2021-07-14'
+LIMIT 5;
+
+SELECT 
+    asofdate, 
+    fedholdings.cusip,
+    currentfacevalue,
+    factortwo,
+    currentfacevalue / factortwo as of,
+    date
+FROM fedholdings
+INNER JOIN poolsfactorjune
+ON fedholdings.cusip = poolsfactorjune.cusip
+WHERE asofdate = '2021-07-21'
+LIMIT 5;
