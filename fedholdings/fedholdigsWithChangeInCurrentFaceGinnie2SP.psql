@@ -7,7 +7,11 @@
 
 -- so I need the pools and platinums current factor to be correct to use this
 
-create or replace PROCEDURE fedholdingscurrface(currentmonth DATE, feddate DATE)
+-- same as other one but just for ginnie twos
+
+-- G2: G2 and one with Type = "SF' and Indicator = 'M" G2
+
+create or replace PROCEDURE fedholdingsCurrfaceGinnie2(currentmonth DATE, feddate DATE)
 language plpgsql
 as
 $$
@@ -22,7 +26,8 @@ begin
         platinumsfactorpreviosmonth,
         fedholdingscurr,
         poolsadjustedcurrface,
-        platsadjustedcurrface;
+        platsadjustedcurrface,
+        platinumsfactorcurrentmonth;
 
   
     -- pools previous factor
@@ -37,8 +42,9 @@ begin
     FROM pools 
     INNER JOIN poolbodies
     ON pools.cusip = poolbodies.cusip 
-    WHERE poolbodies.date = pastmonth;
-    -- LIMIT 10;
+    WHERE poolbodies.date = pastmonth
+    AND pools.type = 'SF'
+    AND pools.indicator = 'M';
 
     -- pools current factor
     CREATE TEMP TABLE poolsfactorcurrentmonth AS
@@ -52,7 +58,9 @@ begin
     FROM pools 
     INNER JOIN poolbodies
     ON pools.cusip = poolbodies.cusip 
-    WHERE poolbodies.date = currentmonth;
+    WHERE poolbodies.date = currentmonth
+    AND pools.type = 'SF'
+    AND pools.indicator = 'M';
 
     -- platinums previous factor
     CREATE TEMP TABLE platinumsfactorpreviosmonth AS
@@ -66,7 +74,9 @@ begin
     FROM platinums 
     INNER JOIN platinumbodies
     ON platinums.cusip = platinumbodies.cusip 
-    WHERE platinumbodies.date = pastmonth;
+    WHERE platinumbodies.date = pastmonth
+    AND platinums.type = 'SP'
+    AND platinumbodies.indicator = 'M';
     -- LIMIT 10;
 
     -- platinums current factor
@@ -81,7 +91,9 @@ begin
     FROM platinums 
     INNER JOIN platinumbodies
     ON platinums.cusip = platinumbodies.cusip 
-    WHERE platinumbodies.date = currentmonth;
+    WHERE platinumbodies.date = currentmonth
+    AND platinums.type = 'SP'
+    AND platinumbodies.indicator = 'M';
 
     -- the fed holdings to be modified
     CREATE TEMP TABLE fedholdingscurr AS
@@ -144,7 +156,8 @@ begin
         platinumsfactorpreviosmonth,
         fedholdingscurr,
         poolsadjustedcurrface,
-        platsadjustedcurrface;
+        platsadjustedcurrface,
+        platinumsfactorcurrentmonth;
 
 
 end;
@@ -154,7 +167,7 @@ $$;
 
 
 
-call fedholdingscurrface('2021-11-01', '2021-12-15');
+call fedholdingsCurrfaceGinnie2('2021-12-01', '2022-01-19');
 
 
 
