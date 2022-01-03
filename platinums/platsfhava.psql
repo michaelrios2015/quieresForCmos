@@ -1,0 +1,265 @@
+-- copied from plats early wam wala wac going to use it to make the plat fhavas as it uses the same
+-- weighted average thing 1/2/22
+
+
+-- Step 1 :   Current face of each platinum for month m (We are actually given this as remainingBalance)
+
+-- = sum   original face of pool i in the platinum * factor of pool i for month m
+
+-- Step 2 :   Weight of each pool i in platinum for the month m (we are given this too but calculating is a bit more accurate)
+
+-- = original face of pool i in the platinum * factor of pool i for month m  /  Current face of platinum for month m
+
+-- For each platinum made up of n pools we have our weights w_i
+
+-- fha = sum w_i * fha_pool i
+
+-- repeat for all of them
+
+--  new table for platfhavas
+CREATE TABLE platfhavas (
+   cusip varchar NOT NULL,
+   fha double precision,
+   va double precision,
+   rural double precision,
+   indian double precision,
+   date date NOT NULL,
+   PRIMARY KEY (cusip, date)
+);
+
+-- loads the plat cusips for each month 
+INSERT INTO platfhavas (cusip, date)
+SELECT DISTINCT cusip, TO_DATE('20211101','YYYYMMDD')
+FROM platinumbodies
+WHERE platinumbodies.date = '2021-11-01';
+
+
+\set currentmonth 'date ''2021-11-01'''
+
+
+create or replace PROCEDURE platfhavas(currentmonth DATE)
+language plpgsql
+as
+$$
+declare
+   countofequalsfha INTEGER := 0;
+   countofequalsva INTEGER := 0;
+   countofequalsrural INTEGER := 0;
+   countofequalsindian INTEGER := 0;
+   numberofplatinums INTEGER;
+begin
+
+    DROP TABLE IF EXISTS currpools, currplats, currpoolfhavas, currplatfhavas, 
+                        platcollsweneed, weightofpoolandplat, weightxfha, tempfhava;
+
+    -- Step 1 :   Current face of each platinum for month m (We are actually given this as remainingBalance)
+    -- so i cheated and skipped this step 
+
+    -- get pool data 
+    CREATE TEMP TABLE currpools AS
+    SELECT
+        pools.cusip,
+        pools.name,
+        pools.indicator,
+        pools.originalface,
+        poolbodies."remainingBalance",
+        poolbodies."remainingBalance" / pools.originalface AS factor
+    FROM pools
+    INNER JOIN poolbodies ON pools.cusip = poolbodies.cusip
+    WHERE poolbodies.date = currentmonth
+    AND poolbodies."remainingBalance" > 0;
+
+    -- what we need from plats
+    -- so appertently we have some of these with really small remaining balances like .02 and 
+    -- the weights cannot be calculated correcly does not really matter becuase these plats and pools are not included in what we show 
+    -- but wanted to make a note
+
+    CREATE TEMP TABLE currplats AS
+    SELECT
+        platinums.cusip,
+        platinums.name,
+        platinums.originalface,
+        platinumbodies.remainingbalance,
+        platinumbodies.remainingbalance / platinums.originalface AS factor
+    FROM platinums
+    INNER JOIN platinumbodies ON platinums.cusip = platinumbodies.cusip
+    WHERE platinumbodies.date = currentmonth
+    -- so for the moment the remaining balance needs to be at least .1 as a way of dealing with
+    -- errors in calculating the weights
+    AND remainingbalance > .1;
+
+    -- what we need from platcolls from month M
+    -- there is still some confusion if I should use current or past month.. not a hige difference
+    -- and pretty sure the  last I heard was to use the current month  
+    
+    CREATE TEMP TABLE platcollsweneed AS
+    SELECT
+        platcolls.cusip AS platcusip,
+        platcolls.poolname,
+        platcolls.indicator,
+        platcolls.faceinplatinum / 100 AS ofinplat,
+        platcolls.born,
+        currplats.remainingbalance    
+    FROM platcolls
+    INNER JOIN currplats
+    ON currplats.cusip = platcolls.cusip
+    WHERE platcolls.born <= currentmonth;
+
+    CREATE TEMP TABLE currpoolfhavas AS
+    SELECT *
+    FROM poolfhavas
+    where date = currentmonth;
+
+    -- Step 2 :   Weight of each pool i in platinum for the month m (we are given this too but calculating is a bit more accurate)
+
+    -- = original face of pool i in the platinum * factor of pool i for month m  /  Current face of platinum for month m
+
+    CREATE TEMP TABLE weightofpoolandplat AS
+    SELECT
+        platcollsweneed.platcusip,
+        platcollsweneed.poolname,
+        platcollsweneed.indicator,
+        platcollsweneed.ofinplat,
+        platcollsweneed.remainingbalance, 
+        currpools.cusip AS poolcusip,
+        platcollsweneed.ofinplat * currpools.factor AS ofxfactor,
+        (platcollsweneed.ofinplat * currpools.factor) / platcollsweneed.remainingbalance AS weightpool,
+        currplats.cusip AS platinplatcusip,
+        platcollsweneed.ofinplat * currplats.factor AS ofplatxfactor,
+        (platcollsweneed.ofinplat * currplats.factor) / platcollsweneed.remainingbalance AS weightplat
+    FROM platcollsweneed
+    LEFT JOIN currpools 
+    ON platcollsweneed.poolname = currpools.name
+    AND platcollsweneed.indicator = currpools.indicator
+    LEFT JOIN currplats ON platcollsweneed.poolname = currplats.name
+    -- it has at least a pool or plat 
+    WHERE ( currpools.cusip IS NOT NULL OR currplats.cusip IS NOT NULL );
+ 
+    -- For each platinum made up of n pools we have our weights w_i
+    -- fha = sum (w_i * fha_pool i)
+
+    SELECT COUNT(*)
+    INTO numberofplatinums
+    FROM currplats;
+
+    RAISE NOTICE '%', numberofplatinums;
+
+    -- we just update  this so we don't need it in the loop 
+    CREATE TEMP TABLE currplatfhavas AS
+    SELECT *
+    FROM platfhavas
+    where date = currentmonth;
+
+    WHILE (numberofplatinums > countofequalsfha OR numberofplatinums > countofequalsva OR numberofplatinums > countofequalsrural OR numberofplatinums > countofequalsindian ) loop
+
+        CREATE TEMP TABLE weightxfha AS
+        SELECT 
+            platcusip,
+            poolcusip,
+            weightpool,
+            currpoolfhavas.fha AS poolfha,
+            weightpool * currpoolfhavas.fha AS poolweightxfha,
+            weightpool * currpoolfhavas.va AS poolweightxva,
+            weightpool * currpoolfhavas.rural AS poolweightxrural,
+            weightpool * currpoolfhavas.indian AS poolweightxindian,
+            platinplatcusip,
+            weightplat,
+            currplatfhavas.fha AS platfha,
+            weightplat * currplatfhavas.fha AS platweightxfha,
+            weightplat * currplatfhavas.va AS platweightxva,
+            weightplat * currplatfhavas.rural AS platweightxrural,
+            weightplat * currplatfhavas.indian AS platweightxindian  
+        FROM weightofpoolandplat
+        LEFT JOIN currpoolfhavas 
+        ON weightofpoolandplat.poolcusip = currpoolfhavas.cusip       
+        LEFT JOIN currplatfhavas
+        ON weightofpoolandplat.platinplatcusip = currplatfhavas.cusip;
+
+        CREATE TEMP TABLE tempfhava AS
+        SELECT 
+            platcusip,
+            SUM(COALESCE(poolweightxfha, platweightxfha, 0)) AS fha,
+            SUM(COALESCE(poolweightxva, platweightxva, 0)) AS va,
+            SUM(COALESCE(poolweightxrural, platweightxrural, 0)) AS rural,
+            SUM(COALESCE(poolweightxindian, platweightxindian, 0)) AS indian
+        FROM weightxfha
+        GROUP BY platcusip;
+
+        SELECT COUNT(*)
+        INTO countofequalsfha
+        FROM tempfhava
+        INNER JOIN currplatfhavas
+        ON tempfhava.platcusip = currplatfhavas.cusip
+        WHERE tempfhava.fha = currplatfhavas.fha;
+
+        SELECT COUNT(*)
+        INTO countofequalsva
+        FROM tempfhava
+        INNER JOIN currplatfhavas
+        ON tempfhava.platcusip = currplatfhavas.cusip
+        WHERE tempfhava.va = currplatfhavas.va;
+
+        SELECT COUNT(*)
+        INTO countofequalsrural
+        FROM tempfhava
+        INNER JOIN currplatfhavas
+        ON tempfhava.platcusip = currplatfhavas.cusip
+        WHERE tempfhava.rural = currplatfhavas.rural;
+
+        SELECT COUNT(*)
+        INTO countofequalsindian
+        FROM tempfhava
+        INNER JOIN currplatfhavas
+        ON tempfhava.platcusip = currplatfhavas.cusip
+        WHERE tempfhava.indian = currplatfhavas.indian;
+
+        RAISE NOTICE 'fha: %, va: %, rural: %, indian: %,   ', countofequalsfha, countofequalsva, countofequalsrural, countofequalsindian; 
+
+        UPDATE currplatfhavas
+        SET 
+            fha = tempfhava.fha,
+            va = tempfhava.va,
+            rural = tempfhava.rural,
+            indian = tempfhava.indian
+        FROM tempfhava
+        WHERE currplatfhavas.cusip = tempfhava.platcusip;
+
+        DROP TABLE tempfhava, weightxfha;
+
+    END loop; 
+
+    UPDATE platfhavas
+    SET fha = currplatfhavas.fha,
+        va = currplatfhavas.va,
+        rural = currplatfhavas.rural,
+        indian = currplatfhavas.indian
+    FROM currplatfhavas 
+    WHERE currplatfhavas.cusip = platfhavas.cusip
+    AND platfhavas.date = currentmonth;    
+
+
+
+    DROP TABLE IF EXISTS currpools, currplats, currpoolfhavas, currplatfhavas, 
+                        platcollsweneed, weightofpoolandplat, weightxfha, tempfhava;
+
+ end;
+
+$$;    
+
+-- this needs to be run with the table platfhavas having only the cusip and dates in it I guess because it loops
+
+call platfhavas('2021-11-01');
+
+    -- combining the three to get current face of plats for month m 
+
+    -----------------------------------------------------------------------------------------------------------
+
+-- 36225A3Z1 is the plat I kicked out for having .02 remaining balance 
+
+   cusip   |         fha         |         va         |         rural         | indian |    date
+-----------+---------------------+--------------------+-----------------------+--------+------------
+ 36225A3Z1 |                     |                    |                       |        | 2021-11-01
+ 36225A2B5 |  0.4856592082876386 | 0.5143409227022676 |                     0 |      0 | 2021-11-01
+ 36225A2C3 |  0.4317518245951716 | 0.5682494721018196 |                     0 |      0 | 2021-11-01
+ 36225A2E9 | 0.22501416618431366 | 0.7258786424503801 |   0.04910865892393832 |      0 | 2021-11-01
+ 36225A2H2 | 0.30168727417386154 | 0.6983112797847516 | 2.033626812344513e-06 |      0 | 2021-11-01
