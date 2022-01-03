@@ -39,7 +39,7 @@ declare
    threemonthspast DATE := currentmonth - interval '1 month' * 3;
 begin
 
-  DROP TABLE IF EXISTS platscurr, threemonthpastdata, twomonthpastdata, pastdata, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
+  DROP TABLE IF EXISTS platscurr, threemonthpastdata, twomonthpastdata, pastdata, platfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
 
   -- ONLY TBA Elig ones 
   CREATE TEMP TABLE platscurr AS
@@ -93,14 +93,12 @@ begin
 
 
   -- I think there are platinums in here too but should check and take out if not
-  CREATE TEMP TABLE poolfhavascurr AS
+  CREATE TEMP TABLE platfhavascurr AS
   SELECT
-     poolfhavas.cusip,
-     poolfhavas.va
-  FROM poolfhavas
-  INNER JOIN platscurr 
-  ON poolfhavas.cusip = platscurr.cusip
-  WHERE poolfhavas.date = currentmonth;
+     platfhavas.cusip,
+     platfhavas.va
+  FROM platfhavas
+  WHERE platfhavas.date = currentmonth;
 
 
   -- the temp table that sums up original face in platinum them and groups them by poolname (with platinums we 
@@ -159,7 +157,7 @@ begin
     platscurr.gwac, 
     platscurr.wala,
     platscurr.wam,
-    poolfhavascurr.va,
+    platfhavascurr.va,
     twomonthpastdata.cpr AS twomonthspastactcpr,
     pastdata.cpr AS pastactcpr,
     platscurr.cpr,
@@ -179,7 +177,7 @@ begin
   LEFT JOIN threemonthpastdata ON (platscurr.cusip = threemonthpastdata.cusip)   
   LEFT JOIN twomonthpastdata ON (platscurr.cusip = twomonthpastdata.cusip)  
   LEFT JOIN pastdata ON (platscurr.cusip = pastdata.cusip)
-  LEFT JOIN poolfhavascurr ON (platscurr.cusip = poolfhavascurr.cusip)
+  LEFT JOIN platfhavascurr ON (platscurr.cusip = platfhavascurr.cusip)
   LEFT JOIN ofinplatinum ON platscurr.name = ofinplatinum.poolname
   LEFT JOIN ofpoolincmo ON platscurr.cusip = ofpoolincmo.cusip 
   LEFT JOIN fedholdingscurr ON platscurr.cusip = fedholdingscurr.cusip;  
@@ -212,7 +210,7 @@ begin
 
   EXECUTE 'COPY (SELECT * FROM platswithnegativefloat) to ''C:\Users\Public\ginnieplatswithnegativefloat' || _indicator || ''' csv header';
 
-  DROP TABLE IF EXISTS platscurr, threemonthpastdata, twomonthpastdata, pastdata, poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
+  DROP TABLE IF EXISTS platscurr, threemonthpastdata, twomonthpastdata, pastdata, platfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, platdataforweb, g1platswithcurrfloat, platswithnegativefloat;  
 
 
 end;
@@ -221,10 +219,10 @@ $$;
 
 -- SEEMS to work fine :)
 
-call outputplats('2021-10-01', '2021-12-08', 'M');
+call outputplats('2021-11-01', '2021-12-29', 'M');
 
 
-call outputplats('2021-10-01', '2021-12-08', 'X');
+call outputplats('2021-11-01', '2021-12-29', 'X');
 
 call outputplats('2021-10-01', '2021-09-01', '2021-12-01', 'M');
 

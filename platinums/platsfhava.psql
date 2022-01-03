@@ -34,6 +34,9 @@ FROM platinumbodies
 WHERE platinumbodies.date = '2021-11-01';
 
 
+DELECT FROM platfhavas
+WHERE date = '2021-11-01';
+
 \set currentmonth 'date ''2021-11-01'''
 
 
@@ -152,6 +155,8 @@ begin
 
     WHILE (numberofplatinums > countofequalsfha OR numberofplatinums > countofequalsva OR numberofplatinums > countofequalsrural OR numberofplatinums > countofequalsindian ) loop
 
+    
+
         CREATE TEMP TABLE weightxfha AS
         SELECT 
             platcusip,
@@ -178,7 +183,8 @@ begin
         CREATE TEMP TABLE tempfhava AS
         SELECT 
             platcusip,
-            SUM(COALESCE(poolweightxfha, platweightxfha, 0)) AS fha,
+            -- COALESVE + or just COALESCE seem to work the same
+            SUM(COALESCE(poolweightxfha, 0) + COALESCE(platweightxfha, 0)) AS fha,
             SUM(COALESCE(poolweightxva, platweightxva, 0)) AS va,
             SUM(COALESCE(poolweightxrural, platweightxrural, 0)) AS rural,
             SUM(COALESCE(poolweightxindian, platweightxindian, 0)) AS indian
@@ -263,3 +269,17 @@ call platfhavas('2021-11-01');
  36225A2C3 |  0.4317518245951716 | 0.5682494721018196 |                     0 |      0 | 2021-11-01
  36225A2E9 | 0.22501416618431366 | 0.7258786424503801 |   0.04910865892393832 |      0 | 2021-11-01
  36225A2H2 | 0.30168727417386154 | 0.6983112797847516 | 2.033626812344513e-06 |      0 | 2021-11-01
+
+    cusip   |         fha         |         va         |         rural         | indian |    date
+-----------+---------------------+--------------------+-----------------------+--------+------------
+ 36225A3Z1 |                     |                    |                       |        | 2021-11-01
+ 36225A2B5 |  0.4856592082876386 | 0.5143409227022676 |                     0 |      0 | 2021-11-01
+ 36225A2C3 |  0.4317518245951716 | 0.5682494721018196 |                     0 |      0 | 2021-11-01
+ 36225A2E9 | 0.22501416618431366 | 0.7258786424503801 |   0.04910865892393832 |      0 | 2021-11-01
+ 36225A2H2 | 0.30168727417386154 | 0.6983112797847516 | 2.033626812344513e-06 |      0 | 2021-11-01
+ 36225A2J8 |  0.3326878839706317 | 0.6667954886500543 |  0.000517667108933206 |      0 | 2021-11-01
+ 36225A2U3 |                   0 | 1.0000108613565484 |                     0 |      0 | 2021-11-01
+ 36225A2V1 |  0.2598617908708136 | 0.7401386862587641 |                     0 |      0 | 2021-11-01
+ 36225A3A6 | 0.41049284736053726 | 0.5895076156691065 |                     0 |      0 | 2021-11-01
+ 36225A3B4 | 0.15513331930498625 | 0.8448667193245292 |                     0 |      0 | 2021-11-01
+ 36225A3C2 |                   0 | 1.0000011678283434 |                     0 |      0 | 2021-11-01
