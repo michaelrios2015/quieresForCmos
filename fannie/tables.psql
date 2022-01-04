@@ -1,0 +1,18 @@
+CREATE TABLE fannies (
+   prefix varchar,
+   securityid varchar,
+   cusip varchar PRIMARY KEY
+);
+
+\COPY fannies FROM 'C:\Users\micha\cvsPyReaders\data\head.cvs' DELIMITER ',' csv header;
+
+
+CREATE TABLE fanniebodies (
+   cusip varchar PRIMARY KEY,
+   factor double precision,
+   wac double precision,
+   age int,
+   wam int 
+);
+
+\COPY fanniebodies FROM 'C:\Users\micha\cvsPyReaders\data\body.cvs' DELIMITER ',' csv header;
