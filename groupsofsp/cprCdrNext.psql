@@ -1,0 +1,16 @@
+
+create or replace PROCEDURE actualcprandcdrnext( currentmonth DATE )
+language plpgsql
+as
+$$
+declare
+    pastmonth DATE := currentmonth - interval '1 month' * 1;
+begin
+
+    call actualcprnext(currentmonth, pastmonth);
+
+    Call actualcdrnext(currentmonth, pastmonth);
+
+end; 
+
+$$;

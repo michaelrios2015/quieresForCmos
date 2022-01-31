@@ -161,7 +161,7 @@ end;
 $$;
 
 
-call get_float_sum ('2021-10-01');
+call get_float_sum ('2021-11-01');
 
 
 
