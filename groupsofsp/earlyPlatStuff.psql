@@ -1,0 +1,15 @@
+create or replace PROCEDURE earlyplatstuff( currentmonth DATE )
+language plpgsql
+as
+$$
+declare
+    pastmonth DATE := currentmonth - interval '1 month' * 1;
+begin
+
+    call platinumsfactorearly(currentmonth);
+
+    Call wamwalawac(currentmonth, pastmonth);
+
+end; 
+
+$$;
