@@ -45,7 +45,10 @@ as
 $$
 declare
    countofequals INTEGER := 0;
+   stepfourcount INTEGER := 1;
    numberofplatinums INTEGER;
+   firsts INTEGER := 1;
+   lasts INTEGER := 0;
 begin
 
     DROP TABLE IF EXISTS currpoolscpr, currplatscpr, platcollsweneed, ofxfactorcpr, platcurrfacecpr, currpoolscprwactual;
@@ -167,13 +170,19 @@ begin
     
     RAISE NOTICE '%', numberofplatinums; 
 
-    WHILE numberofplatinums > countofequals loop
-
+    -- WHILE numberofplatinums > countofequals loop
+    -- WHILE firsts != lasts loop
+    WHILE stepfourcount > countofequals loop
         ---------------------------------------------------------------------
         -- after first time uncomment from here and run 
         DROP TABLE IF EXISTS platcpr, currplatswithcpr, almoststepthree, stepthree, stepfour;
 
         -- so the cprs are for month + 1
+
+        firsts = lasts;
+
+        RAISE NOTICE 'firsts %', firsts; 
+
 
         CREATE TEMP TABLE platcpr AS
         SELECT 
@@ -181,6 +190,12 @@ begin
             platinumbodies.predictedcpr AS cpr
         FROM  platinumbodies
         WHERE date = currentmonth;
+
+        SELECT COUNT(*) 
+        INTO stepfourcount 
+        FROM platcpr;
+
+        RAISE NOTICE 'platcpr count %', stepfourcount; 
 
         -- so plat info for month m and cpr for m+1 
         -- ok all good so far
@@ -194,6 +209,14 @@ begin
             platcpr.cpr
         FROM currplatscpr
         INNER JOIN platcpr ON currplatscpr.cusip = platcpr.cusip;
+
+        
+        SELECT COUNT(*) 
+        INTO stepfourcount 
+        FROM currplatswithcpr;
+
+        RAISE NOTICE 'currplatswithcpr count %', stepfourcount; 
+    
 
         -- step three without summing
 
@@ -276,6 +299,14 @@ begin
         ORDER BY
             platcollsweneed.poolname;
 
+        
+        SELECT COUNT(*) 
+        INTO stepfourcount 
+        FROM almoststepthree;
+
+        RAISE NOTICE 'almoststepthree count %', stepfourcount; 
+    
+
         ----------
         -- summing almost step three to get step three
 
@@ -290,6 +321,14 @@ begin
         GROUP BY
             almoststepthree.platinumcusip;
 
+        SELECT COUNT(*) 
+        INTO stepfourcount 
+        FROM stepthree;
+
+        RAISE NOTICE 'stepthree count %', stepfourcount; 
+
+
+
 
         --  just a temp table 
         CREATE TEMP TABLE stepfour AS
@@ -298,13 +337,22 @@ begin
             (1 - POWER((1 - smm), 12)) AS cpr 
         FROM stepthree;
 
+        SELECT COUNT(*) 
+        INTO stepfourcount 
+        FROM stepfour
+        INNER JOIN platinumbodies
+        ON stepfour.platinumcusip = platinumbodies.cusip
+        WHERE platinumbodies.date =  currentmonth;
+
+        RAISE NOTICE 'step four count %', stepfourcount; 
 
         ---------- so I can use this to see if the tables are equal then run the above to update then rerun the query
 
         --  this would also need a varible to now which column of platinumbodies to put it in
         
         SELECT COUNT(*) 
-        INTO countofequals 
+        INTO countofequals
+        -- INTO lasts 
         FROM stepfour
         INNER JOIN platinumbodies
         ON stepfour.platinumcusip = platinumbodies.cusip
@@ -312,6 +360,7 @@ begin
         AND platinumbodies.date =  currentmonth;
 
         RAISE NOTICE '%', countofequals; 
+        -- RAISE NOTICE '%', lasts;
 
         --- This will update platinum bodies cprs now with m + 1
 
@@ -341,7 +390,7 @@ end;
 $$;
 
 
-call predictedcpr('2021-11-01', '2021-10-01');
+call predictedcpr('2022-04-01', '2022-03-01');
 
 --- this can erease all the cprs
 UPDATE platinumbodies

@@ -16,13 +16,15 @@ begin
 
     call outputplats(currentmonth, feddate, 'X');
 
+    call outputpoolsJMorRG(currentmonth, feddate, 'JM');
+
+    call outputpoolsJMorRG(currentmonth, feddate, 'RG');
 
 end; 
 
 $$;
 
-call processdataforweb('2021-11-01', '2021-12-08');
-
+call processdataforweb('2022-03-01', '2022-05-04');
 
 
 call outputpools('2021-11-01', '2021-10-01', '2021-09-01', '2021-12-01', 'M');
