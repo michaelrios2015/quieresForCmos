@@ -12,11 +12,11 @@ begin
 
     call predictedcpr(futuremonth, currentmonth); 
 
-    call predictednextcpr(futuremonth, currentmonth);
+    -- call predictednextcpr(futuremonth, currentmonth);
 
-    call actualcdr(currentmonth, pastmonth); 
+    -- call actualcdr(currentmonth, pastmonth); 
 
-    call predictedcdr(futuremonth, currentmonth); 
+    -- call predictedcdr(futuremonth, currentmonth); 
 
 
 end; 

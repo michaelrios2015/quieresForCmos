@@ -50,7 +50,13 @@ declare
    numberofplatinums INTEGER;
 begin
 
-    DROP TABLE IF EXISTS currpoolscpr, currplatscpr, platcollsweneed, ofxfactorcpr, platcurrfacecpr, currpoolscprwactual;
+    DROP TABLE IF EXISTS curractualcprs, currpoolscpr, currplatscpr, platcollsweneed, 
+                            ofxfactorcpr, platcurrfacecpr, currpoolscprwactual;
+
+    CREATE TEMP TABLE curractualcprs AS
+    SELECT * 
+    FROM actualcprs 
+    WHERE actualcprs.date =  currentmonth;
 
     -- should probably rename stuff at some point
     CREATE TEMP TABLE currpoolscpr AS
@@ -152,13 +158,13 @@ begin
         currpoolscpr.indicator,
         currpoolscpr.originalface,
         currpoolscpr."remainingBalance",
-        actualcprs.actualcpr
+        curractualcprs.actualcpr
     FROM
         currpoolscpr
     -- I guess it needs to be inner join becuase we need a cpr??
     -- this is where I had to deal with a null value I believe  
-    INNER JOIN actualcprs ON currpoolscpr.cusip = actualcprs.cusip
-    WHERE actualcprs.date =  currentmonth;
+    INNER JOIN curractualcprs 
+    ON currpoolscpr.cusip = curractualcprs.cusip;
 
     -- This could probably be prettier
     SELECT COUNT(*)
@@ -325,6 +331,7 @@ begin
     END loop;
 
     DROP TABLE IF EXISTS 
+        curractualcprs,
         currpoolscpr, 
         currplatscpr, 
         platcollsweneed, 
@@ -342,7 +349,7 @@ end;
 $$;
 
 
-call actualcprnext('2021-10-01', '2021-09-01');
+call actualcprnext('2022-06-01', '2022-05-01');
 
 --- this can erease all the cprs
 UPDATE platinumbodies

@@ -51,7 +51,8 @@ declare
    numberofplatinums INTEGER;
 begin
 
-    DROP TABLE IF EXISTS currpoolscpr, currplatscpr, platcollsweneed, ofxfactorcpr, platcurrfacecpr, currpoolscprwactual;
+    DROP TABLE IF EXISTS currpoolscpr, currplatscpr, platcollsweneed, 
+    predictionsweneed, ofxfactorcpr, platcurrfacecpr, currpoolscprwactual;
 
     -- should probably rename stuff at some point
     CREATE TEMP TABLE currpoolscpr AS
@@ -146,6 +147,13 @@ begin
 
     -- so here I can in theory go from actual to predicted to predicted next
     -- would need a variable for the table and column
+
+    CREATE TEMP TABLE predictionsweneed AS
+    SELECT * 
+    FROM poolpredictions
+    WHERE poolpredictions.date =  futuremonth;
+
+
     CREATE TEMP TABLE currpoolscprwactual AS
     SELECT
         currpoolscpr.cusip,
@@ -153,13 +161,13 @@ begin
         currpoolscpr.indicator,
         currpoolscpr.originalface,
         currpoolscpr."remainingBalance",
-        poolpredictions.cdr AS cpr
+        predictionsweneed.cdr AS cpr
     FROM
         currpoolscpr
     -- I guess it needs to be inner join becuase we need a cpr??
     -- this is where I had to deal with a null value I believe  
-    INNER JOIN poolpredictions ON currpoolscpr.cusip = poolpredictions.cusip
-    WHERE poolpredictions.date =  futuremonth;
+    INNER JOIN predictionsweneed 
+    ON currpoolscpr.cusip = predictionsweneed.cusip;
 
     -- This could probably be prettier
     SELECT COUNT(*)
@@ -328,7 +336,8 @@ begin
     DROP TABLE IF EXISTS 
         currpoolscpr, 
         currplatscpr, 
-        platcollsweneed, 
+        platcollsweneed,
+        predictionsweneed, 
         ofxfactorcpr, 
         platcurrfacecpr, 
         currpoolscprwactual,
@@ -343,7 +352,7 @@ end;
 $$;
 
 
-call predictedcdr('2021-11-01', '2021-10-01');
+call predictedcdr('2022-05-01', '2022-04-01');
 
 --- this can erease all the cprs
 UPDATE platinumbodies
