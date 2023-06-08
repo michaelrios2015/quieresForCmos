@@ -126,8 +126,9 @@ begin
       SUM(faceincmo) AS ofincmo
   FROM
       uniqueofincmos
-  WHERE date <= pastmonth
-  AND ( collapsed >  pastmonth OR collapsed IS NULL) 
+  -- if I need to change the date 
+  -- WHERE date <= currentmonth
+  WHERE ( collapsed >  currentmonth OR collapsed IS NULL) 
   GROUP BY
       cusip;
 

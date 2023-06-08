@@ -9,7 +9,7 @@ begin
 
     call actualcprnext(currentmonth, pastmonth);
 
-    Call actualcdrnext(currentmonth, pastmonth);
+    --Call actualcdrnext(currentmonth, pastmonth);
 
 end; 
 

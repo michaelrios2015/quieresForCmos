@@ -4,11 +4,34 @@ as
 $$
 declare
     pastmonth DATE := currentmonth - interval '1 month' * 1;
+    futuremonth DATE := currentmonth + interval '1 month' * 1;
 begin
+
+    CREATE TEMP TABLE platinumbodiestemp AS
+    SELECT
+    cusip,
+    interestrate
+    FROM platinumbodies
+    -- change month (our most recent platinums)
+    WHERE date = pastmonth;
+
+
+    -- put them into platinum bodies
+    INSERT INTO platinumbodies (cusip, interestrate, remainingbalance, factor, gwac, wam, wala, date )
+    -- change month (the month we are going into)
+    SELECT cusip, interestrate, 0, 0, 0, 0, 0, currentmonth
+    FROM platinumbodiestemp;
+
+
+    DROP TABLE platinumbodiestemp;
 
     call platinumsfactorearly(currentmonth);
 
     Call wamwalawac(currentmonth, pastmonth);
+
+    Call processplatdata(futuremonth, currentmonth, pastmonth);
+
+    call platfhavas(currentmonth);
 
 end; 
 

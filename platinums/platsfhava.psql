@@ -55,6 +55,12 @@ begin
     DROP TABLE IF EXISTS currpools, currplats, currpoolfhavas, currplatfhavas, 
                         platcollsweneed, weightofpoolandplat, weightxfha, tempfhava;
 
+    -- use my fake platinums
+    INSERT INTO platfhavas (cusip, date)
+    SELECT DISTINCT cusip, currentmonth
+    FROM platinumbodies
+    WHERE platinumbodies.date = currentmonth;
+
     -- Step 1 :   Current face of each platinum for month m (We are actually given this as remainingBalance)
     -- so i cheated and skipped this step 
 

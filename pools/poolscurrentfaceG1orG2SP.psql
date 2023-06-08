@@ -76,9 +76,10 @@ DROP TABLE IF EXISTS
       cusip,
       SUM(faceincmo) AS ofincmo
   FROM uniqueofincmos
-  WHERE date <=  pastmonth
+  -- commenting out date, cannot make a past report 
+  -- WHERE date <=  currentmonth
   -- Probably just not collapsed?? but I guess there could be a scenario where one collapses in the future
-  AND ( collapsed >  pastmonth OR collapsed IS NULL) 
+  WHERE ( collapsed >  currentmonth OR collapsed IS NULL) 
   GROUP BY cusip;
 
   --temp table, fed holdings has only one per pool?? I guess so 
