@@ -1,8 +1,10 @@
-create or replace PROCEDURE processplatdata(futuremonth DATE, currentmonth DATE, pastmonth DATE)
+create or replace PROCEDURE processplatdata(currentmonth DATE)
 language plpgsql
 as
 $$
 declare
+    pastmonth DATE := currentmonth - interval '1 month' * 1;
+    futuremonth DATE := currentmonth + interval '1 month' * 1;
 
 begin
 
@@ -23,7 +25,7 @@ end;
 
 $$;
 
-call processplatdata('2021-09-01', '2021-08-01', '2021-07-01');
+call processplatdata('2021-08-01');
 
 UPDATE platinumbodies
 SET 

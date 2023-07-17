@@ -1,0 +1,270 @@
+-- for our daily pools  
+-- forgot how this differs from the g1 and g2s... really should know 
+-- could be written better but should work 
+
+
+create or replace PROCEDURE outputdailypoolsJMorRG(currentmonth DATE, _type VARCHAR, _1stbd BOOLEAN)
+language plpgsql
+as
+$$
+declare
+  numberofnegatives INTEGER;
+  futuremonth DATE := currentmonth + interval '1 month' * 1;
+  pastmonth DATE := currentmonth - interval '1 month' * 1;
+  twomonthspast DATE := currentmonth - interval '1 month' * 2;
+  counttable INTEGER;
+begin
+
+
+DROP TABLE IF EXISTS 
+  poolscurr, currentactualcpr, currentactualcdr, pastactualcpr, poolpredictionscurr, 
+  poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, pooldataforweb,  
+  poolswithnegativefloat, poolpastpredictions, poolpredictionsfuture,  futureactualcpr,
+  pooltwomonthspastpredictions, pooldataforwebtwo, pooldataforwebthree, twomonthpastactualcpr, futureactualcdr,
+  pooldataforwebfour, futureactualcdr, pooldataforwebfour, cdrpredictionscurr, cdrpredictionsfuture, pooldataforwebfive;
+
+
+-- still need to do this stuff
+
+  -- cusip, name, indicator, type, issuedate, currface, coupon, gwac, wala, wam, date
+  CREATE TEMP TABLE poolscurr AS
+  SELECT   
+      pools.cusip,
+      pools.name,
+      pools.indicator,
+      pools.type,
+      pools.issuedate,
+      pools.originalface,
+      poolbodies."remainingBalance" AS currface,
+      poolbodies."remainingBalance" / pools.originalface AS factor, 
+      poolbodies."interestRate" AS coupon,
+      poolbodies."GWAC" AS gwac,
+      poolbodies."WAM" AS wam,
+      poolbodies."WALA" AS wala,
+      poolbodies.date 
+  FROM pools 
+  INNER JOIN poolbodies
+  ON pools.cusip = poolbodies.cusip 
+  WHERE poolbodies.date =  futuremonth
+  AND pools.type = _type;
+
+-- am i getting anything 
+  SELECT COUNT(*)
+  INTO  counttable 
+  FROM poolscurr;
+  
+  
+  RAISE NOTICE '%', counttable; 
+
+
+  
+  -- adding original face in cmos 
+  -- SO we use the CMOS for month M-1 though just using Month M seems fine too
+  CREATE TEMP TABLE ofpoolincmo AS
+  SELECT
+      cusip,
+      SUM(faceincmo) AS ofincmo
+  FROM uniqueofincmos
+  -- In case i need date
+  -- WHERE date <=  currentmonth
+  -- Probably just not collapsed?? but I guess there could be a scenario where one collapses in the future
+  WHERE ( collapsed >  futuremonth OR collapsed IS NULL) 
+  GROUP BY cusip;
+
+  CREATE TEMP TABLE poolfhavascurr AS
+  SELECT *
+  FROM poolfhavas
+  WHERE poolfhavas.date =  futuremonth;
+
+  RAISE NOTICE 'PUTTING IT ALL TOGTHER';
+    
+  -- cusip,name,indicator,type,issuedate,currface,cfincmo,cfinfed,cfinplat,coupon,gwac,wala,wam,va,
+  CREATE TEMP TABLE pooldataforweb AS
+  SELECT
+    poolscurr.cusip,
+    poolscurr.name,
+    poolscurr.indicator,
+    poolscurr.type,
+    poolscurr.issuedate,
+    poolscurr.currface,
+    ofpoolincmo.ofincmo * poolscurr.factor AS cfincmo,
+    0 AS cfinfed,
+    0 AS cfinplat,
+    poolscurr.coupon,
+    poolscurr.gwac,
+    poolscurr.wala,
+    poolscurr.wam,
+    poolfhavascurr.va,
+    poolscurr.date
+  FROM poolscurr
+  LEFT JOIN poolfhavascurr ON (poolscurr.cusip = poolfhavascurr.cusip)
+  LEFT JOIN ofpoolincmo ON poolscurr.cusip = ofpoolincmo.cusip; 
+  
+  
+  -- twomonthspastactcpr, pastactcpr,cpr,cprnext,
+  CREATE TEMP TABLE pooldataforwebtwo AS
+  SELECT
+    pooldataforweb.cusip,
+    pooldataforweb.name,
+    pooldataforweb.indicator,
+    pooldataforweb.type,
+    pooldataforweb.issuedate,
+    pooldataforweb.currface,
+    pooldataforweb.cfincmo,
+    pooldataforweb.cfinfed,
+    pooldataforweb.cfinplat,
+    pooldataforweb.coupon,
+    pooldataforweb.gwac,
+    pooldataforweb.wala,
+    pooldataforweb.wam,
+    pooldataforweb.va,
+    0 AS twomonthspastactcpr,
+    0 AS pastactcpr,
+    0 AS curractualcpr,
+    0 AS cpractnext,
+    pooldataforweb.date
+  FROM pooldataforweb;  
+  
+  RAISE NOTICE 'CREATED TEMP TABLE';
+
+  CREATE TEMP TABLE pooldataforwebthree AS
+  SELECT
+    pooldataforwebtwo.cusip,
+    pooldataforwebtwo.name,
+    pooldataforwebtwo.indicator,
+    pooldataforwebtwo.type,
+    pooldataforwebtwo.issuedate,
+    pooldataforwebtwo.currface,
+    pooldataforwebtwo.cfincmo,
+    pooldataforwebtwo.cfinfed,
+    pooldataforwebtwo.cfinplat,
+    pooldataforwebtwo.coupon,
+    pooldataforwebtwo.gwac,
+    pooldataforwebtwo.wala,
+    pooldataforwebtwo.wam,
+    pooldataforwebtwo.va,
+    pooldataforwebtwo.twomonthspastactcpr,
+    pooldataforwebtwo.pastactcpr,
+    pooldataforwebtwo.curractualcpr,
+    pooldataforwebtwo.cpractnext,
+    0 AS twomonthspastpredictedcpr,
+    0 AS pastpredictedcpr,
+    0 AS currpredictedcpr,
+    0 AS futurepredictedcpr,
+    0 AS futurepredictedcprnext,
+    pooldataforwebtwo.date
+  FROM pooldataforwebtwo;  
+
+  CREATE TEMP TABLE pooldataforwebfour AS
+  SELECT 
+    pooldataforwebthree.cusip,
+    pooldataforwebthree.name,
+    pooldataforwebthree.indicator,
+    pooldataforwebthree.type,
+    pooldataforwebthree.issuedate,
+    pooldataforwebthree.currface,
+    pooldataforwebthree.cfincmo,
+    pooldataforwebthree.cfinfed,
+    pooldataforwebthree.cfinplat,
+    pooldataforwebthree.coupon,
+    pooldataforwebthree.gwac,
+    pooldataforwebthree.wala,
+    pooldataforwebthree.wam,
+    pooldataforwebthree.va,
+    pooldataforwebthree.twomonthspastactcpr,
+    pooldataforwebthree.pastactcpr,
+    pooldataforwebthree.curractualcpr,
+    pooldataforwebthree.cpractnext,
+    pooldataforwebthree.twomonthspastpredictedcpr,
+    pooldataforwebthree.pastpredictedcpr,
+    pooldataforwebthree.currpredictedcpr,
+    pooldataforwebthree.futurepredictedcpr,
+    pooldataforwebthree.futurepredictedcprnext,
+    0 AS curractualcdr,
+    0 AS futureactualcdr,
+    pooldataforwebthree.date
+  FROM pooldataforwebthree;
+
+  
+
+  CREATE TEMP TABLE pooldataforwebfive AS
+  SELECT 
+      pooldataforwebfour.cusip,
+      pooldataforwebfour.name,
+      pooldataforwebfour.indicator,
+      pooldataforwebfour.type,
+      pooldataforwebfour.issuedate,
+      pooldataforwebfour.currface,
+      pooldataforwebfour.cfincmo,
+      pooldataforwebfour.cfinfed,
+      pooldataforwebfour.cfinplat,
+      pooldataforwebfour.coupon,
+      pooldataforwebfour.gwac,
+      pooldataforwebfour.wala,
+      pooldataforwebfour.wam,
+      pooldataforwebfour.va,
+      pooldataforwebfour.twomonthspastactcpr,
+      pooldataforwebfour.pastactcpr,
+      pooldataforwebfour.curractualcpr,
+      pooldataforwebfour.cpractnext,
+      pooldataforwebfour.twomonthspastpredictedcpr,
+      pooldataforwebfour.pastpredictedcpr,
+      pooldataforwebfour.currpredictedcpr,
+      pooldataforwebfour.futurepredictedcpr,
+      pooldataforwebfour.futurepredictedcprnext,
+      pooldataforwebfour.curractualcdr,
+      pooldataforwebfour.futureactualcdr,
+      0 AS currcdrprediction,
+      0 AS futurecdrprediction,
+      currentmonth AS date
+  FROM pooldataforwebfour;
+
+  -- this gets all the pools, eventually will want to limit it to pools with float 
+
+  -- \COPY (SELECT * FROM pooldataforwedfive) to 'C:\Users\micha\g1poolswithcurrfloat' csv header;
+
+  IF _1stbd THEN
+    EXECUTE 'COPY (SELECT * FROM pooldataforwebfive) to ''C:\Users\Public\1stbddailypoolswithcurrfloat' || _type || ''' csv header';
+  ELSE 
+    EXECUTE 'COPY (SELECT * FROM pooldataforwebfive) to ''C:\Users\Public\dailypoolswithcurrfloat' || _type || ''' csv header';
+  END IF;
+
+  ---------pools with negative current face 
+  CREATE TEMP TABLE poolswithnegativefloat AS
+  SELECT 
+    cusip,
+    currface - COALESCE(cfincmo, 0) AS minus,
+    currface,
+    cfincmo,
+    cfinfed,
+    cfinplat
+  FROM pooldataforweb
+  WHERE currface - COALESCE(cfincmo, 0)  < -1
+  ORDER BY currface - COALESCE(cfincmo, 0)  ASC;
+
+  EXECUTE 'COPY (SELECT * FROM poolswithnegativefloat) to ''C:\Users\Public\dasilypoolswithnegativefloat' || _type || ''' csv header';
+
+  SELECT COUNT(*)
+  INTO  numberofnegatives 
+  FROM poolswithnegativefloat;
+
+  -- is the plats for 36179VKJ8 terminated or something..
+
+  RAISE NOTICE '%', numberofnegatives; 
+
+DROP TABLE IF EXISTS 
+  poolscurr, currentactualcpr, currentactualcdr, pastactualcpr, poolpredictionscurr, 
+  poolfhavascurr, ofinplatinum, ofpoolincmo, fedholdingscurr, pooldataforweb,  
+  poolswithnegativefloat, poolpastpredictions, poolpredictionsfuture,  futureactualcpr,
+  pooltwomonthspastpredictions, pooldataforwebtwo, pooldataforwebthree, twomonthpastactualcpr, futureactualcdr,
+  pooldataforwebfour, futureactualcdr, pooldataforwebfour, cdrpredictionscurr, cdrpredictionsfuture, pooldataforwebfive;
+
+
+end;
+
+$$;
+
+
+call outputdailypoolsJMorRG( '2023-05-01', '2023-06-07', 'JM');
+
+call outputdailypoolsJMorRG( '2023-05-01', '2023-06-07', 'RG');

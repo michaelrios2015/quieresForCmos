@@ -1,0 +1,24 @@
+
+
+create or replace PROCEDURE processdailydataforweb(currentmonth DATE, _1stbd BOOLEAN)
+language plpgsql
+as
+$$
+declare
+
+begin
+
+    call outputdailypools(currentmonth, 'M', _1stbd);
+
+    call outputdailypools(currentmonth, 'X', _1stbd);
+
+    call outputdailypoolsJMorRG(currentmonth, 'JM', _1stbd);
+
+    call outputdailypoolsJMorRG(currentmonth, 'RG', _1stbd);
+
+end; 
+
+$$;
+
+call processdailydataforweb('2023-05-01', ture);
+
